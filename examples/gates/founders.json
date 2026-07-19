@@ -1,0 +1,24 @@
+{
+  "schema_version": 1,
+  "token": {
+    "schema_version": 1,
+    "name": "Founders Token",
+    "symbol": "FNDR",
+    "decimals": 0,
+    "definition_account_id": "1111111111111111111111111111111111111111111111111111111111111111",
+    "token_program_owner": "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
+    "definition_account": "Private/founders-definition",
+    "supply_account": "Private/founders-supply",
+    "issuer_account": "Private/founders-issuer",
+    "total_supply": 1000000
+  },
+  "context": {
+    "application_id": "tokenstudio",
+    "gate_id": "founders-chat",
+    "token_program_owner": "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
+    "token_definition_id": "1111111111111111111111111111111111111111111111111111111111111111",
+    "threshold": 100,
+    "verifier_id": "logos-chat:founders",
+    "expires_at_unix_ms": null
+  }
+}

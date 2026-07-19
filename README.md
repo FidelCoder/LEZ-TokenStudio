@@ -63,7 +63,9 @@ LEZ-TokenStudio/
 │   ├── attestation-types/         # shared proof envelope and journal types
 │   ├── attestation-prover/        # client-side proof generator
 │   ├── attestation-verifier/      # off-chain local verifier
-│   └── attestation-cli/           # issuer/holder/verifier CLI
+│   ├── attestation-cli/           # issuer/holder/verifier CLI
+│   ├── lez-compat/                # exact LEZ commitment and Merkle semantics
+│   └── tokenstudio-config/        # token/gate config and wallet adapter
 ├── guests/
 │   └── balance-attestation/       # Risc0 guest proving balance >= threshold
 ├── programs/
@@ -79,9 +81,15 @@ LEZ-TokenStudio/
 
 ## Current Status
 
-The repo has been cloned and is ready for implementation. The next build step is
-to scaffold the Rust workspace, wire LEZ/Risc0 dependencies, and implement the
-shared proof envelope before the circuit and integrations.
+The Rust workspace now includes shared attestation types, exact LEZ commitment
+and Merkle compatibility, validated token and gate config files, and a structured
+`proofgate` CLI. Issuers can select or create a token through the official LEZ
+wallet command adapter, mint demo balances, create an asset-specific gate, and
+compute its stable context hash.
+
+The active build step is the Risc0 balance-attestation guest and host prover.
+On-chain verification, Logos Messaging, and the Basecamp interface follow that
+stable proof format.
 
 ## Sources Checked
 

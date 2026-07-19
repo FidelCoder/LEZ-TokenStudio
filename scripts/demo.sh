@@ -7,6 +7,7 @@ cargo run -p proofgate -- context-hash \
   --application-id tokenstudio \
   --gate-id founders-chat \
   --token-owner-hex "$TOKEN_OWNER_HEX" \
+  --token-definition-id-hex 1111111111111111111111111111111111111111111111111111111111111111 \
   --threshold 100 \
   --verifier-id logos-chat:founders \
   --expires-at-unix-ms 1800000000000

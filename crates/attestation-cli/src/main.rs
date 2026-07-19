@@ -1,130 +1,277 @@
-use std::{collections::BTreeMap, env, process};
+use std::{
+    path::PathBuf,
+    process,
+    time::{SystemTime, UNIX_EPOCH},
+};
 
-use attestation_types::{digest_to_hex, GateContext, ProgramOwner};
+use attestation_types::{digest_from_hex, digest_to_hex, program_owner_from_hex, GateContext};
+use clap::{Args, Parser, Subcommand};
+use tokenstudio_config::{
+    create_token_invocation, mint_token_invocation, read_gate_config, read_token_config,
+    write_gate_config, write_token_config, GateConfig, TokenConfig, TOKEN_CONFIG_VERSION,
+};
+
+#[derive(Debug, Parser)]
+#[command(
+    name = "proofgate",
+    version,
+    about = "No-code private token gates for Logos"
+)]
+struct Cli {
+    #[command(subcommand)]
+    command: Command,
+}
+
+#[derive(Debug, Subcommand)]
+enum Command {
+    Version,
+    ContextHash(ContextArgs),
+    Token {
+        #[command(subcommand)]
+        command: TokenCommand,
+    },
+    Gate {
+        #[command(subcommand)]
+        command: GateCommand,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+enum TokenCommand {
+    Select(TokenConfigArgs),
+    Create(TokenCreateArgs),
+    Mint(TokenMintArgs),
+}
+
+#[derive(Debug, Subcommand)]
+enum GateCommand {
+    Init(GateInitArgs),
+    Hash {
+        #[arg(long)]
+        gate: PathBuf,
+    },
+    Show {
+        #[arg(long)]
+        gate: PathBuf,
+    },
+}
+
+#[derive(Clone, Debug, Args)]
+struct TokenConfigArgs {
+    #[arg(long)]
+    name: String,
+    #[arg(long)]
+    symbol: String,
+    #[arg(long, default_value_t = 0)]
+    decimals: u8,
+    #[arg(long)]
+    definition_account_id_hex: String,
+    #[arg(long)]
+    token_program_owner_hex: String,
+    #[arg(long)]
+    definition_account: String,
+    #[arg(long)]
+    supply_account: String,
+    #[arg(long)]
+    issuer_account: String,
+    #[arg(long)]
+    total_supply: u128,
+    #[arg(long)]
+    output: PathBuf,
+}
+
+impl TokenConfigArgs {
+    fn config(&self) -> Result<TokenConfig, String> {
+        Ok(TokenConfig {
+            schema_version: TOKEN_CONFIG_VERSION,
+            name: self.name.clone(),
+            symbol: self.symbol.clone(),
+            decimals: self.decimals,
+            definition_account_id: digest_from_hex(&self.definition_account_id_hex)
+                .map_err(|error| format!("invalid --definition-account-id-hex: {error}"))?,
+            token_program_owner: program_owner_from_hex(&self.token_program_owner_hex)
+                .map_err(|error| format!("invalid --token-program-owner-hex: {error}"))?,
+            definition_account: self.definition_account.clone(),
+            supply_account: self.supply_account.clone(),
+            issuer_account: self.issuer_account.clone(),
+            total_supply: self.total_supply,
+        })
+    }
+}
+
+#[derive(Debug, Args)]
+struct TokenCreateArgs {
+    #[command(flatten)]
+    token: TokenConfigArgs,
+    #[arg(long, default_value = "wallet")]
+    wallet_binary: PathBuf,
+    #[arg(long)]
+    dry_run: bool,
+}
+
+#[derive(Debug, Args)]
+struct TokenMintArgs {
+    #[arg(long)]
+    token: PathBuf,
+    #[arg(long)]
+    holder: String,
+    #[arg(long)]
+    amount: u128,
+    #[arg(long, default_value = "wallet")]
+    wallet_binary: PathBuf,
+    #[arg(long)]
+    dry_run: bool,
+}
+
+#[derive(Debug, Args)]
+struct GateInitArgs {
+    #[arg(long)]
+    token: PathBuf,
+    #[arg(long)]
+    application_id: String,
+    #[arg(long)]
+    gate_id: String,
+    #[arg(long)]
+    threshold: u128,
+    #[arg(long)]
+    verifier_id: String,
+    #[arg(long)]
+    expires_at_unix_ms: Option<u64>,
+    #[arg(long)]
+    output: PathBuf,
+}
+
+#[derive(Debug, Args)]
+struct ContextArgs {
+    #[arg(long)]
+    application_id: String,
+    #[arg(long)]
+    gate_id: String,
+    #[arg(long)]
+    token_owner_hex: String,
+    #[arg(long)]
+    token_definition_id_hex: String,
+    #[arg(long)]
+    threshold: u128,
+    #[arg(long)]
+    verifier_id: String,
+    #[arg(long)]
+    expires_at_unix_ms: Option<u64>,
+}
 
 fn main() {
-    if let Err(error) = run(env::args().skip(1).collect()) {
+    if let Err(error) = run(Cli::parse()) {
         eprintln!("error: {error}");
         process::exit(1);
     }
 }
 
-fn run(args: Vec<String>) -> Result<(), String> {
-    let Some(command) = args.first().map(String::as_str) else {
-        print_help();
-        return Ok(());
-    };
-
-    match command {
-        "version" => {
+fn run(cli: Cli) -> Result<(), String> {
+    match cli.command {
+        Command::Version => {
             println!("{}", env!("CARGO_PKG_VERSION"));
-            Ok(())
         }
-        "context-hash" => {
-            let options = parse_options(&args[1..])?;
+        Command::ContextHash(args) => {
+            println!(
+                "{}",
+                digest_to_hex(&context_from_args(args)?.context_hash())
+            );
+        }
+        Command::Token { command } => run_token_command(command)?,
+        Command::Gate { command } => run_gate_command(command)?,
+    }
+    Ok(())
+}
+
+fn run_token_command(command: TokenCommand) -> Result<(), String> {
+    match command {
+        TokenCommand::Select(args) => {
+            let config = args.config()?;
+            write_token_config(&args.output, &config).map_err(|error| error.to_string())?;
+            println!("Token config written to {}", args.output.display());
+        }
+        TokenCommand::Create(args) => {
+            let config = args.token.config()?;
+            config.validate().map_err(|error| error.to_string())?;
+            let invocation = create_token_invocation(args.wallet_binary, &config);
+            println!("LEZ wallet command: {}", invocation.display());
+            if !args.dry_run {
+                invocation.run().map_err(|error| error.to_string())?;
+            }
+            write_token_config(&args.token.output, &config).map_err(|error| error.to_string())?;
+            println!("Token config written to {}", args.token.output.display());
+        }
+        TokenCommand::Mint(args) => {
+            let token = read_token_config(&args.token).map_err(|error| error.to_string())?;
+            let invocation =
+                mint_token_invocation(args.wallet_binary, &token, &args.holder, args.amount)
+                    .map_err(|error| error.to_string())?;
+            println!("LEZ wallet command: {}", invocation.display());
+            if !args.dry_run {
+                invocation.run().map_err(|error| error.to_string())?;
+            }
+        }
+    }
+    Ok(())
+}
+
+fn run_gate_command(command: GateCommand) -> Result<(), String> {
+    match command {
+        GateCommand::Init(args) => {
+            if let Some(expiry) = args.expires_at_unix_ms {
+                if expiry <= now_unix_ms()? {
+                    return Err("--expires-at-unix-ms must be in the future".to_owned());
+                }
+            }
+            let token = read_token_config(&args.token).map_err(|error| error.to_string())?;
             let context = GateContext {
-                application_id: required(&options, "application-id")?,
-                gate_id: required(&options, "gate-id")?,
-                token_program_owner: parse_program_owner(&required(&options, "token-owner-hex")?)?,
-                threshold: required(&options, "threshold")?
-                    .parse()
-                    .map_err(|_| "--threshold must be a u128 integer".to_owned())?,
-                verifier_id: required(&options, "verifier-id")?,
-                expires_at_unix_ms: optional(&options, "expires-at-unix-ms")?
-                    .map(|value| {
-                        value
-                            .parse()
-                            .map_err(|_| "--expires-at-unix-ms must be a u64 integer".to_owned())
-                    })
-                    .transpose()?,
+                application_id: args.application_id,
+                gate_id: args.gate_id,
+                token_program_owner: token.token_program_owner,
+                token_definition_id: token.definition_account_id,
+                threshold: args.threshold,
+                verifier_id: args.verifier_id,
+                expires_at_unix_ms: args.expires_at_unix_ms,
             };
-
-            println!("{}", digest_to_hex(&context.context_hash()));
-            Ok(())
+            let config = GateConfig::new(token, context).map_err(|error| error.to_string())?;
+            write_gate_config(&args.output, &config).map_err(|error| error.to_string())?;
+            println!("Gate config written to {}", args.output.display());
+            println!("Context hash: {}", digest_to_hex(&config.context_hash()));
         }
-        "help" | "--help" | "-h" => {
-            print_help();
-            Ok(())
+        GateCommand::Hash { gate } => {
+            let config = read_gate_config(gate).map_err(|error| error.to_string())?;
+            println!("{}", digest_to_hex(&config.context_hash()));
         }
-        unknown => Err(format!("unknown command `{unknown}`")),
-    }
-}
-
-fn print_help() {
-    println!(
-        "TokenStudio ProofGate\n\n\
-         Commands:\n\
-           proofgate version\n\
-           proofgate context-hash \\\n\
-             --application-id <id> \\\n\
-             --gate-id <id> \\\n\
-             --token-owner-hex <32-byte-hex> \\\n\
-             --threshold <u128> \\\n\
-             --verifier-id <id> \\\n\
-             [--expires-at-unix-ms <u64>]\n"
-    );
-}
-
-fn parse_options(args: &[String]) -> Result<BTreeMap<String, String>, String> {
-    let mut options = BTreeMap::new();
-    let mut index = 0;
-
-    while index < args.len() {
-        let key = args[index]
-            .strip_prefix("--")
-            .ok_or_else(|| format!("expected option starting with --, got `{}`", args[index]))?;
-        let value = args
-            .get(index + 1)
-            .ok_or_else(|| format!("missing value for --{key}"))?;
-        if value.starts_with("--") {
-            return Err(format!("missing value for --{key}"));
+        GateCommand::Show { gate } => {
+            let config = read_gate_config(gate).map_err(|error| error.to_string())?;
+            println!(
+                "{}",
+                serde_json::to_string_pretty(&config).map_err(|error| error.to_string())?
+            );
         }
-        options.insert(key.to_owned(), value.to_owned());
-        index += 2;
     }
-
-    Ok(options)
+    Ok(())
 }
 
-fn required(options: &BTreeMap<String, String>, key: &str) -> Result<String, String> {
-    options
-        .get(key)
-        .cloned()
-        .ok_or_else(|| format!("missing --{key}"))
+fn context_from_args(args: ContextArgs) -> Result<GateContext, String> {
+    Ok(GateContext {
+        application_id: args.application_id,
+        gate_id: args.gate_id,
+        token_program_owner: program_owner_from_hex(&args.token_owner_hex)
+            .map_err(|error| format!("invalid --token-owner-hex: {error}"))?,
+        token_definition_id: digest_from_hex(&args.token_definition_id_hex)
+            .map_err(|error| format!("invalid --token-definition-id-hex: {error}"))?,
+        threshold: args.threshold,
+        verifier_id: args.verifier_id,
+        expires_at_unix_ms: args.expires_at_unix_ms,
+    })
 }
 
-fn optional(options: &BTreeMap<String, String>, key: &str) -> Result<Option<String>, String> {
-    Ok(options.get(key).cloned())
-}
-
-fn parse_program_owner(hex: &str) -> Result<ProgramOwner, String> {
-    let bytes = parse_hex_32(hex)?;
-    let mut owner = [0_u32; 8];
-    for (index, chunk) in bytes.chunks_exact(4).enumerate() {
-        owner[index] = u32::from_le_bytes(chunk.try_into().expect("chunk has four bytes"));
-    }
-    Ok(owner)
-}
-
-fn parse_hex_32(hex: &str) -> Result<[u8; 32], String> {
-    let hex = hex
-        .strip_prefix("0x")
-        .or_else(|| hex.strip_prefix("0X"))
-        .unwrap_or(hex);
-    if hex.len() != 64 {
-        return Err("--token-owner-hex must be exactly 32 bytes / 64 hex chars".to_owned());
-    }
-
-    let mut bytes = [0_u8; 32];
-    for (index, byte) in bytes.iter_mut().enumerate() {
-        let offset = index * 2;
-        *byte = parse_hex_byte(&hex[offset..offset + 2])?;
-    }
-    Ok(bytes)
-}
-
-fn parse_hex_byte(hex: &str) -> Result<u8, String> {
-    u8::from_str_radix(hex, 16).map_err(|_| format!("invalid hex byte `{hex}`"))
+fn now_unix_ms() -> Result<u64, String> {
+    let duration = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map_err(|_| "system clock is before Unix epoch".to_owned())?;
+    u64::try_from(duration.as_millis()).map_err(|_| "current time exceeds u64".to_owned())
 }
 
 #[cfg(test)]
@@ -132,29 +279,47 @@ mod tests {
     use super::*;
 
     #[test]
-    fn parses_program_owner_as_le_u32_words() {
-        let owner =
-            parse_program_owner("000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f")
-                .unwrap();
+    fn parses_nested_gate_hash_command() {
+        let cli = Cli::try_parse_from([
+            "proofgate",
+            "gate",
+            "hash",
+            "--gate",
+            "examples/gates/founders.json",
+        ])
+        .unwrap();
 
-        assert_eq!(
-            owner,
-            [
-                0x0302_0100,
-                0x0706_0504,
-                0x0b0a_0908,
-                0x0f0e_0d0c,
-                0x1312_1110,
-                0x1716_1514,
-                0x1b1a_1918,
-                0x1f1e_1d1c,
-            ]
-        );
+        assert!(matches!(
+            cli.command,
+            Command::Gate {
+                command: GateCommand::Hash { .. }
+            }
+        ));
     }
 
     #[test]
-    fn context_hash_command_requires_values() {
-        let error = run(vec!["context-hash".to_owned()]).unwrap_err();
-        assert!(error.contains("missing --application-id"));
+    fn context_hash_requires_specific_token_definition() {
+        let error = Cli::try_parse_from([
+            "proofgate",
+            "context-hash",
+            "--application-id",
+            "tokenstudio",
+            "--gate-id",
+            "founders",
+            "--token-owner-hex",
+            &"11".repeat(32),
+            "--threshold",
+            "100",
+            "--verifier-id",
+            "logos-chat:founders",
+        ])
+        .unwrap_err();
+
+        assert!(error.to_string().contains("token-definition-id-hex"));
+    }
+
+    #[test]
+    fn gate_config_version_is_current() {
+        assert_eq!(tokenstudio_config::GATE_CONFIG_VERSION, 1);
     }
 }
