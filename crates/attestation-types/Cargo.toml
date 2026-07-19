@@ -1,0 +1,12 @@
+[package]
+name = "attestation-types"
+description = "Shared TokenStudio ProofGate attestation envelope and gate context types"
+authors.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+version.workspace = true
+
+[dependencies]
+serde.workspace = true
+sha2.workspace = true

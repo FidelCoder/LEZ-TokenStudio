@@ -1,0 +1,10 @@
+/target/
+/result
+/result-*
+/.direnv/
+/.env
+/.DS_Store
+/node_modules/
+/dist/
+/build/
+/coverage/

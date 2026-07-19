@@ -1,0 +1,18 @@
+[workspace]
+members = [
+  "crates/attestation-cli",
+  "crates/attestation-types",
+]
+resolver = "2"
+
+[workspace.package]
+authors = ["FidelCoder"]
+edition = "2021"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/FidelCoder/LEZ-TokenStudio"
+version = "0.1.0"
+
+[workspace.dependencies]
+attestation-types = { path = "crates/attestation-types" }
+serde = { version = "1", features = ["derive"] }
+sha2 = "0.10"

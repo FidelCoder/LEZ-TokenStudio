@@ -1,0 +1,11 @@
+[package]
+name = "proofgate"
+description = "TokenStudio ProofGate command-line tools"
+authors.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+version.workspace = true
+
+[dependencies]
+attestation-types.workspace = true
