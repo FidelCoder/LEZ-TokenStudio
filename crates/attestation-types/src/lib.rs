@@ -77,8 +77,6 @@ impl GateContext {
 pub struct AttestationJournal {
     pub version: u16,
     #[serde(with = "serde_digest_hex")]
-    pub circuit_id: Digest32,
-    #[serde(with = "serde_digest_hex")]
     pub context_hash: Digest32,
     #[serde(with = "serde_program_owner_hex")]
     pub token_program_owner: ProgramOwner,
@@ -96,7 +94,6 @@ pub struct AttestationJournal {
 impl AttestationJournal {
     #[must_use]
     pub fn new(
-        circuit_id: Digest32,
         gate_context: &GateContext,
         commitment_root: Digest32,
         presenter_public_key: PublicKey32,
@@ -104,7 +101,6 @@ impl AttestationJournal {
     ) -> Self {
         Self {
             version: ATTESTATION_JOURNAL_VERSION,
-            circuit_id,
             context_hash: gate_context.context_hash(),
             token_program_owner: gate_context.token_program_owner,
             token_definition_id: gate_context.token_definition_id,
@@ -301,7 +297,7 @@ mod tests {
     #[test]
     fn journal_uses_gate_context_values() {
         let context = sample_context();
-        let journal = AttestationJournal::new([1; 32], &context, [2; 32], [3; 32], 42);
+        let journal = AttestationJournal::new(&context, [2; 32], [3; 32], 42);
 
         assert_eq!(journal.version, ATTESTATION_JOURNAL_VERSION);
         assert_eq!(journal.context_hash, context.context_hash());

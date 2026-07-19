@@ -1,5 +1,6 @@
 use attestation_types::{sha256, Digest32, ProgramOwner};
 use serde::{Deserialize, Serialize};
+use thiserror::Error;
 
 pub const COMMITMENT_PREFIX: &[u8; 32] =
     b"/LEE/v0.3/Commitment/\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00";
@@ -106,6 +107,55 @@ pub fn hash_account_data(data: &[u8]) -> Digest32 {
     sha256(data)
 }
 
+pub const FUNGIBLE_TOKEN_HOLDING_VARIANT: u8 = 0;
+pub const FUNGIBLE_TOKEN_HOLDING_LENGTH: usize = 49;
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct FungibleTokenHolding {
+    pub definition_id: Digest32,
+    pub balance: u128,
+}
+
+impl FungibleTokenHolding {
+    #[must_use]
+    pub fn encode(&self) -> [u8; FUNGIBLE_TOKEN_HOLDING_LENGTH] {
+        let mut bytes = [0_u8; FUNGIBLE_TOKEN_HOLDING_LENGTH];
+        bytes[0] = FUNGIBLE_TOKEN_HOLDING_VARIANT;
+        bytes[1..33].copy_from_slice(&self.definition_id);
+        bytes[33..49].copy_from_slice(&self.balance.to_le_bytes());
+        bytes
+    }
+
+    pub fn decode(bytes: &[u8]) -> Result<Self, TokenHoldingDecodeError> {
+        if bytes.len() != FUNGIBLE_TOKEN_HOLDING_LENGTH {
+            return Err(TokenHoldingDecodeError::InvalidLength {
+                actual: bytes.len(),
+            });
+        }
+        if bytes[0] != FUNGIBLE_TOKEN_HOLDING_VARIANT {
+            return Err(TokenHoldingDecodeError::NotFungible { variant: bytes[0] });
+        }
+
+        let mut definition_id = [0_u8; 32];
+        definition_id.copy_from_slice(&bytes[1..33]);
+        let mut balance = [0_u8; 16];
+        balance.copy_from_slice(&bytes[33..49]);
+
+        Ok(Self {
+            definition_id,
+            balance: u128::from_le_bytes(balance),
+        })
+    }
+}
+
+#[derive(Clone, Debug, Error, PartialEq, Eq)]
+pub enum TokenHoldingDecodeError {
+    #[error("fungible token holding must contain exactly 49 bytes; got {actual}")]
+    InvalidLength { actual: usize },
+    #[error("token holding Borsh variant {variant} is not fungible")]
+    NotFungible { variant: u8 },
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -192,6 +242,32 @@ mod tests {
         assert!(left_proof.verifies(&left, &root));
         assert!(right_proof.verifies(&right, &root));
         assert!(!right_proof.verifies(&left, &root));
+    }
+
+    #[test]
+    fn fungible_token_holding_matches_lez_borsh_layout() {
+        let holding = FungibleTokenHolding {
+            definition_id: [0x33; 32],
+            balance: 0x0f0e_0d0c_0b0a_0908_0706_0504_0302_0100,
+        };
+        let encoded = holding.encode();
+
+        assert_eq!(encoded[0], 0);
+        assert_eq!(&encoded[1..33], &[0x33; 32]);
+        assert_eq!(&encoded[33..], &(0_u8..16).collect::<Vec<_>>());
+        assert_eq!(FungibleTokenHolding::decode(&encoded).unwrap(), holding);
+    }
+
+    #[test]
+    fn rejects_non_fungible_and_malformed_token_data() {
+        assert!(matches!(
+            FungibleTokenHolding::decode(&[1; 49]),
+            Err(TokenHoldingDecodeError::NotFungible { variant: 1 })
+        ));
+        assert!(matches!(
+            FungibleTokenHolding::decode(&[0; 48]),
+            Err(TokenHoldingDecodeError::InvalidLength { actual: 48 })
+        ));
     }
 
     #[test]

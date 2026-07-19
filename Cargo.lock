@@ -53,6 +53,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "attestation-circuit"
+version = "0.1.0"
+dependencies = [
+ "attestation-types",
+ "lez-compat",
+ "serde",
+ "serde_json",
+ "thiserror",
+]
+
+[[package]]
 name = "attestation-types"
 version = "0.1.0"
 dependencies = [
@@ -186,6 +197,7 @@ dependencies = [
  "attestation-types",
  "serde",
  "sha2",
+ "thiserror",
 ]
 
 [[package]]

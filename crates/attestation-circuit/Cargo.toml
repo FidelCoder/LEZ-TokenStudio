@@ -1,5 +1,6 @@
 [package]
-name = "lez-compat"
+name = "attestation-circuit"
+description = "Pure ProofGate balance-attestation statement evaluated inside the Risc0 guest"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
@@ -7,6 +8,9 @@ repository.workspace = true
 
 [dependencies]
 attestation-types.workspace = true
+lez-compat.workspace = true
 serde.workspace = true
-sha2.workspace = true
 thiserror.workspace = true
+
+[dev-dependencies]
+serde_json.workspace = true
