@@ -10,10 +10,14 @@ repository.workspace = true
 attestation-circuit.workspace = true
 attestation-types.workspace = true
 balance-attestation-methods.workspace = true
+base64.workspace = true
 bincode.workspace = true
+bs58.workspace = true
+hex.workspace = true
+jsonrpsee.workspace = true
+lez-compat.workspace = true
 risc0-zkvm.workspace = true
 serde.workspace = true
+serde_json.workspace = true
 thiserror.workspace = true
-
-[dev-dependencies]
-lez-compat.workspace = true
+tokenstudio-config.workspace = true

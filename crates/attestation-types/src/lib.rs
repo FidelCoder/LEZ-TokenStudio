@@ -1,7 +1,14 @@
 use std::fmt;
 
+use base64::{engine::general_purpose::STANDARD as BASE64, Engine as _};
+
 use serde::{de::Error as _, Deserialize, Deserializer, Serialize, Serializer};
 use sha2::{Digest, Sha256};
+
+mod challenge;
+pub use challenge::{
+    VerificationChallenge, VERIFICATION_CHALLENGE_DOMAIN, VERIFICATION_CHALLENGE_VERSION,
+};
 
 pub const GATE_CONTEXT_DOMAIN: &[u8] = b"LEZ-TokenStudio/GateContext/v2";
 pub const ATTESTATION_JOURNAL_VERSION: u16 = 2;
@@ -129,8 +136,10 @@ pub enum ProofTransport {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct AttestationEnvelope {
     pub journal: AttestationJournal,
+    #[serde(with = "serde_bytes_base64")]
     pub receipt: Vec<u8>,
-    pub challenge: Vec<u8>,
+    pub challenge: VerificationChallenge,
+    #[serde(with = "serde_bytes_base64")]
     pub presenter_signature: Vec<u8>,
     pub transport: ProofTransport,
 }
@@ -254,6 +263,25 @@ pub mod serde_program_owner_hex {
     {
         let value = String::deserialize(deserializer)?;
         program_owner_from_hex(&value).map_err(D::Error::custom)
+    }
+}
+
+pub mod serde_bytes_base64 {
+    use super::*;
+
+    pub fn serialize<S>(value: &[u8], serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        serializer.serialize_str(&BASE64.encode(value))
+    }
+
+    pub fn deserialize<'de, D>(deserializer: D) -> Result<Vec<u8>, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let value = String::deserialize(deserializer)?;
+        BASE64.decode(value).map_err(D::Error::custom)
     }
 }
 

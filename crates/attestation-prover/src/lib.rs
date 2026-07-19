@@ -3,13 +3,23 @@ use std::env;
 use attestation_circuit::{evaluate, BalanceAttestationWitness, CircuitError};
 use attestation_types::AttestationJournal;
 use balance_attestation_methods::{BALANCE_ATTESTATION_ELF, BALANCE_ATTESTATION_ID};
+use base64::{engine::general_purpose::STANDARD as BASE64, Engine as _};
 use risc0_zkvm::{default_prover, ExecutorEnv, ProverOpts, Receipt};
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use thiserror::Error;
+
+mod input;
+pub use input::{
+    account_from_wallet_output, capture_wallet_snapshot, fetch_sequencer_input,
+    private_account_id_from_mention, prove_live, read_private_snapshot, read_proof,
+    read_prover_input, write_private_snapshot, write_proof, write_prover_input, InputError,
+    PrivateAccountSnapshot, ProofRequest, ProverInputFile,
+};
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Risc0AttestationProof {
     pub journal: AttestationJournal,
+    #[serde(with = "receipt_base64")]
     pub receipt: Vec<u8>,
 }
 
@@ -23,6 +33,8 @@ pub enum DevModeStatus {
 pub enum ProverError {
     #[error("private witness does not satisfy the attestation statement: {0}")]
     InvalidWitness(#[from] CircuitError),
+    #[error(transparent)]
+    Input(#[from] InputError),
     #[error("RISC0_DEV_MODE must be 0 or unset for a real ProofGate proof")]
     DevModeEnabled,
     #[error("RISC0_DEV_MODE has unsupported value '{0}'")]
@@ -103,6 +115,10 @@ pub fn prove(witness: &BalanceAttestationWitness) -> Result<Risc0AttestationProo
     Ok(Risc0AttestationProof { journal, receipt })
 }
 
+pub fn prove_request(request: &ProofRequest) -> Result<Risc0AttestationProof, ProverError> {
+    prove(&request.witness()?)
+}
+
 pub fn verify_receipt(proof: &Risc0AttestationProof) -> Result<AttestationJournal, ProverError> {
     let receipt = decode_receipt(&proof.receipt)?;
     receipt
@@ -120,6 +136,25 @@ pub fn verify_receipt(proof: &Risc0AttestationProof) -> Result<AttestationJourna
 
 pub fn decode_receipt(bytes: &[u8]) -> Result<Receipt, ProverError> {
     bincode::deserialize(bytes).map_err(|error| ProverError::ReceiptDecode(error.to_string()))
+}
+
+mod receipt_base64 {
+    use super::*;
+
+    pub fn serialize<S>(value: &[u8], serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        serializer.serialize_str(&BASE64.encode(value))
+    }
+
+    pub fn deserialize<'de, D>(deserializer: D) -> Result<Vec<u8>, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let value = String::deserialize(deserializer)?;
+        BASE64.decode(value).map_err(serde::de::Error::custom)
+    }
 }
 
 #[cfg(test)]
@@ -198,6 +233,21 @@ mod tests {
         assert!(default_executor()
             .execute(env, BALANCE_ATTESTATION_ELF)
             .is_err());
+    }
+
+    #[test]
+    fn proof_json_uses_base64_receipt() {
+        let proof = Risc0AttestationProof {
+            journal: evaluate(&valid_witness()).unwrap(),
+            receipt: vec![0, 1, 2, 253, 254, 255],
+        };
+        let json = serde_json::to_string(&proof).unwrap();
+
+        assert!(json.contains("\"receipt\":\"AAEC/f7/\""));
+        assert_eq!(
+            serde_json::from_str::<Risc0AttestationProof>(&json).unwrap(),
+            proof
+        );
     }
 
     #[test]

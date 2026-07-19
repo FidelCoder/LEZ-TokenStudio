@@ -1,5 +1,6 @@
 [package]
-name = "proofgate"
+name = "attestation-verifier"
+description = "Challenge-bound off-chain verifier for TokenStudio ProofGate"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
@@ -7,12 +8,8 @@ repository.workspace = true
 
 [dependencies]
 attestation-prover.workspace = true
-attestation-verifier.workspace = true
 attestation-types.workspace = true
-clap.workspace = true
 ed25519-dalek.workspace = true
 rand.workspace = true
-serde.workspace = true
-serde_json.workspace = true
-tokio.workspace = true
+thiserror.workspace = true
 tokenstudio-config.workspace = true
