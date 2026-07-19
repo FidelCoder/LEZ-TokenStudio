@@ -65,6 +65,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "lez-compat"
+version = "0.1.0"
+dependencies = [
+ "attestation-types",
+ "serde",
+ "sha2",
+]
+
+[[package]]
 name = "libc"
 version = "0.2.186"
 source = "registry+https://github.com/rust-lang/crates.io-index"
