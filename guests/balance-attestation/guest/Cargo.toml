@@ -1,0 +1,14 @@
+[package]
+name = "balance-attestation-guest"
+version = "0.1.0"
+edition = "2021"
+
+[workspace]
+
+[[bin]]
+name = "balance_attestation"
+path = "src/bin/balance_attestation.rs"
+
+[dependencies]
+attestation-circuit = { path = "../../../crates/attestation-circuit" }
+risc0-zkvm = { version = "=3.0.5", default-features = false, features = ["std"] }

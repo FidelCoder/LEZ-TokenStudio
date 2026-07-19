@@ -87,9 +87,11 @@ and Merkle compatibility, validated token and gate config files, and a structure
 wallet command adapter, mint demo balances, create an asset-specific gate, and
 compute its stable context hash.
 
-The active build step is the Risc0 balance-attestation guest and host prover.
-On-chain verification, Logos Messaging, and the Basecamp interface follow that
-stable proof format.
+The Risc0 balance-attestation guest and host prover now generate and verify a
+real succinct receipt with `RISC0_DEV_MODE=0`. The active build step is wallet
+and sequencer proof-input acquisition, followed by challenge-bound verification.
+On-chain verification, Logos Messaging, and the Basecamp interface then consume
+that stable proof format.
 
 ## Sources Checked
 

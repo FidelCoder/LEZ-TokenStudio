@@ -1,0 +1,13 @@
+[package]
+name = "balance-attestation-methods"
+description = "Embedded Risc0 guest image for TokenStudio ProofGate"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[build-dependencies]
+risc0-build.workspace = true
+
+[package.metadata.risc0]
+methods = ["guest"]

@@ -1,0 +1,19 @@
+[package]
+name = "attestation-prover"
+description = "Host-side Risc0 prover for TokenStudio ProofGate"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+attestation-circuit.workspace = true
+attestation-types.workspace = true
+balance-attestation-methods.workspace = true
+bincode.workspace = true
+risc0-zkvm.workspace = true
+serde.workspace = true
+thiserror.workspace = true
+
+[dev-dependencies]
+lez-compat.workspace = true
