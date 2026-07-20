@@ -1,0 +1,20 @@
+[package]
+name = "balance-gate-guest"
+description = "SPEL LEZ program that recursively verifies private balance attestations"
+version = "0.1.0"
+edition = "2021"
+license = "MIT OR Apache-2.0"
+
+[workspace]
+
+[[bin]]
+name = "balance_gate"
+path = "src/bin/balance_gate.rs"
+
+[dependencies]
+attestation-types = { path = "../../../crates/attestation-types" }
+balance-gate-core = { path = "../../../crates/balance-gate-core" }
+nssa_core = { git = "https://github.com/logos-blockchain/logos-execution-zone.git", tag = "v0.2.0", package = "lee_core" }
+risc0-zkvm = { version = "=3.0.5", default-features = false, features = ["std"] }
+serde = { version = "1", features = ["derive"] }
+spel-framework = { git = "https://github.com/logos-co/spel.git", rev = "0cb7e0980535af619482cf1c823f4d394b3ebd61" }

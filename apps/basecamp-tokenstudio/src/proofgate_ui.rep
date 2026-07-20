@@ -1,0 +1,17 @@
+#include <QStringList>
+
+class ProofGateUi
+{
+    PROP(QString proofgateBinary READONLY)
+    PROP(bool busy=false READONLY)
+    PROP(QString activeOperation READONLY)
+    PROP(QString lastOutput READONLY)
+    PROP(QString lastError READONLY)
+    PROP(int lastExitCode=0 READONLY)
+
+    SLOT(bool configureProofgateBinary(QString path))
+    SLOT(bool start(QString operation, QStringList arguments))
+    SLOT(bool cancel())
+
+    SIGNAL(operationFinished(bool success, int exitCode, QString output, QString error))
+}

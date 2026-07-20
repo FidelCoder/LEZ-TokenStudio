@@ -1,0 +1,29 @@
+{
+  "name": "tokenstudio_proofgate_ui",
+  "display_name": "TokenStudio ProofGate",
+  "version": "0.1.0",
+  "type": "ui_qml",
+  "interface": "universal",
+  "category": "privacy",
+  "description": "No-code private token creation, balance proofs, and access gates for Logos",
+  "author": "FidelCoder",
+  "main": "tokenstudio_proofgate_ui_plugin",
+  "view": "qml/ProofGateView.qml",
+  "dependencies": ["logos_execution_zone", "chat_module"],
+  "codegen": {
+    "rep": "src/proofgate_ui.rep"
+  },
+  "nix": {
+    "packages": {
+      "build": [],
+      "runtime": ["qt6.qtdeclarative", "zstd", "krb5", "abseil-cpp"]
+    },
+    "external_libraries": [],
+    "cmake": {
+      "find_packages": [],
+      "extra_sources": [],
+      "extra_include_dirs": [],
+      "extra_link_libraries": []
+    }
+  }
+}

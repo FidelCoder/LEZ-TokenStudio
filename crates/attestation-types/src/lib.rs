@@ -12,6 +12,7 @@ pub use challenge::{
 
 pub const GATE_CONTEXT_DOMAIN: &[u8] = b"LEZ-TokenStudio/GateContext/v2";
 pub const ATTESTATION_JOURNAL_VERSION: u16 = 2;
+pub const ATTESTATION_JOURNAL_DOMAIN: &[u8] = b"LEZ-TokenStudio/AttestationJournal/v2";
 
 pub type Digest32 = [u8; 32];
 pub type ProgramOwner = [u32; 8];
@@ -99,6 +100,30 @@ pub struct AttestationJournal {
 }
 
 impl AttestationJournal {
+    #[must_use]
+    pub fn canonical_bytes(&self) -> Vec<u8> {
+        let mut bytes = Vec::new();
+        bytes.extend_from_slice(ATTESTATION_JOURNAL_DOMAIN);
+        bytes.extend_from_slice(&self.version.to_le_bytes());
+        bytes.extend_from_slice(&self.context_hash);
+        for word in self.token_program_owner {
+            bytes.extend_from_slice(&word.to_le_bytes());
+        }
+        bytes.extend_from_slice(&self.token_definition_id);
+        bytes.extend_from_slice(&self.threshold.to_le_bytes());
+        bytes.extend_from_slice(&self.commitment_root);
+        bytes.extend_from_slice(&self.presenter_public_key);
+        bytes.extend_from_slice(&self.issued_at_unix_ms.to_le_bytes());
+        match self.expires_at_unix_ms {
+            Some(expires_at) => {
+                bytes.push(1);
+                bytes.extend_from_slice(&expires_at.to_le_bytes());
+            }
+            None => bytes.push(0),
+        }
+        bytes
+    }
+
     #[must_use]
     pub fn new(
         gate_context: &GateContext,

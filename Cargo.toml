@@ -1,15 +1,23 @@
 [workspace]
 members = [
+  "crates/attestation-image-id",
   "crates/attestation-prover",
   "crates/attestation-verifier",
+  "crates/balance-gate-core",
+  "crates/lez-gate-sdk",
+  "crates/proofgate-messaging",
   "guests/balance-attestation",
+  "programs/balance-gate",
   "crates/attestation-cli",
   "crates/attestation-types",
   "crates/attestation-circuit",
   "crates/lez-compat",
   "crates/tokenstudio-config",
 ]
-exclude = ["guests/balance-attestation/guest"]
+exclude = [
+  "guests/balance-attestation/guest",
+  "programs/balance-gate/guest",
+]
 resolver = "2"
 
 [workspace.package]
@@ -20,21 +28,30 @@ repository = "https://github.com/FidelCoder/LEZ-TokenStudio"
 version = "0.1.0"
 
 [workspace.dependencies]
+attestation-image-id = { path = "crates/attestation-image-id" }
 attestation-types = { path = "crates/attestation-types" }
 attestation-prover = { path = "crates/attestation-prover" }
 attestation-verifier = { path = "crates/attestation-verifier" }
+balance-gate-core = { path = "crates/balance-gate-core" }
+balance-gate-methods = { path = "programs/balance-gate" }
+lez-gate-sdk = { path = "crates/lez-gate-sdk" }
+proofgate-messaging = { path = "crates/proofgate-messaging" }
 balance-attestation-methods = { path = "guests/balance-attestation" }
 attestation-circuit = { path = "crates/attestation-circuit" }
 lez-compat = { path = "crates/lez-compat" }
 tokenstudio-config = { path = "crates/tokenstudio-config" }
+lee = { git = "https://github.com/logos-blockchain/logos-execution-zone.git", tag = "v0.2.0", features = ["prove"] }
+lee_core = { git = "https://github.com/logos-blockchain/logos-execution-zone.git", tag = "v0.2.0", features = ["host"] }
 clap = { version = "4.5", features = ["derive"] }
 serde_json = "1"
 thiserror = "2"
 bincode = "1.3"
+borsh = { version = "1.5", features = ["derive"] }
 base64 = "0.22"
 bs58 = "0.5"
 hex = "0.4"
 ed25519-dalek = { version = "2.2", features = ["rand_core"] }
+fs2 = "0.4"
 rand = "0.8"
 jsonrpsee = { version = "=0.26.0", features = ["http-client"] }
 tokio = { version = "1.50", features = ["macros", "rt-multi-thread"] }

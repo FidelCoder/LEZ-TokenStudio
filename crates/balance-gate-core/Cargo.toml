@@ -1,0 +1,17 @@
+[package]
+name = "balance-gate-core"
+description = "Deterministic LEZ on-chain state transition for TokenStudio ProofGate"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+attestation-image-id.workspace = true
+attestation-types.workspace = true
+borsh.workspace = true
+ed25519-dalek.workspace = true
+serde.workspace = true
+sha2.workspace = true
+thiserror.workspace = true
+spel-framework = { git = "https://github.com/logos-co/spel.git", rev = "0cb7e0980535af619482cf1c823f4d394b3ebd61" }

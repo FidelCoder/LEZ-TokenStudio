@@ -5,10 +5,20 @@ use attestation_types::program_owner_from_hex;
 use lez_compat::{FungibleTokenHolding, LezAccount, MembershipProof};
 
 fn main() {
-    let output = env::args_os()
-        .nth(1)
+    let mut arguments = env::args_os().skip(1);
+    let output = arguments
+        .next()
         .map(PathBuf::from)
         .unwrap_or_else(|| PathBuf::from("examples/witnesses/founders.json"));
+    let token_balance = arguments
+        .next()
+        .map(|value| {
+            value
+                .to_string_lossy()
+                .parse::<u128>()
+                .expect("token balance must be an unsigned integer")
+        })
+        .unwrap_or(250);
     let definition_id = [0x11; 32];
     let account = LezAccount {
         account_id: [0x22; 32],
@@ -20,7 +30,7 @@ fn main() {
         nonce: 9,
         data: FungibleTokenHolding {
             definition_id,
-            balance: 250,
+            balance: token_balance,
         }
         .encode()
         .to_vec(),

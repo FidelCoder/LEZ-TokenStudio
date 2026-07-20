@@ -19,6 +19,34 @@ jobs:
         with:
           components: clippy, rustfmt
 
+      - name: Cache Risc0 toolchain
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/bin/cargo-risczero
+            ~/.rustup/toolchains/risc0
+            ~/.rustup/update-hashes/risc0
+          key: risc0-3.0.5-rust-1.97.0-${{ runner.os }}-${{ runner.arch }}
+
+      - name: Install Risc0 toolchain
+        run: |
+          if ! cargo risczero --version 2>/dev/null | grep -Fq '3.0.5'; then
+            cargo install cargo-risczero --version 3.0.5 --locked
+          fi
+          if ! rustc +risc0 --version 2>/dev/null | grep -Fq '1.97.0'; then
+            cargo risczero install --version 1.97.0
+          fi
+
+      - name: Validate repository artifacts
+        run: |
+          bash -n scripts/demo.sh
+          bash -n demos/token-gated-chat/run.sh
+          jq -e . apps/basecamp-tokenstudio/metadata.json >/dev/null
+          jq -e . programs/balance-gate/idl/balance_gate.json >/dev/null
+          generated=$(cargo run --quiet -p balance-gate-methods --example generate_idl | jq -S -c .)
+          committed=$(jq -S -c . programs/balance-gate/idl/balance_gate.json)
+          test "$generated" = "$committed"
+
       - name: Format
         run: cargo fmt --all --check
 

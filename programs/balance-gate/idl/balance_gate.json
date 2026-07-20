@@ -1,0 +1,91 @@
+{
+  "accounts": [
+    {
+      "name": "OnChainAttestationJournal",
+      "type": {
+        "fields": [
+          { "name": "version", "type": "u16" },
+          { "name": "context_hash", "type": { "array": ["u8", 32] } },
+          { "name": "token_program_owner", "type": { "array": ["u32", 8] } },
+          { "name": "token_definition_id", "type": { "array": ["u8", 32] } },
+          { "name": "threshold", "type": "u128" },
+          { "name": "commitment_root", "type": { "array": ["u8", 32] } },
+          { "name": "presenter_public_key", "type": { "array": ["u8", 32] } },
+          { "name": "issued_at_unix_ms", "type": "u64" },
+          { "name": "expires_at_unix_ms", "type": { "option": "u64" } }
+        ],
+        "kind": "struct"
+      }
+    },
+    {
+      "name": "GateState",
+      "type": {
+        "fields": [
+          { "name": "version", "type": "u16" },
+          { "name": "context_hash", "type": { "array": ["u8", 32] } },
+          { "name": "token_program_owner", "type": { "array": ["u32", 8] } },
+          { "name": "token_definition_id", "type": { "array": ["u8", 32] } },
+          { "name": "threshold", "type": "u128" },
+          { "name": "expires_at_unix_ms", "type": { "option": "u64" } },
+          { "name": "challenge_nonce", "type": { "array": ["u8", 32] } },
+          { "name": "claim_counter", "type": "u64" }
+        ],
+        "kind": "struct"
+      }
+    },
+    {
+      "name": "ClaimAccess",
+      "type": {
+        "fields": [
+          { "name": "journal", "type": { "defined": "OnChainAttestationJournal" } },
+          { "name": "presenter_signature", "type": { "vec": "u8" } }
+        ],
+        "kind": "struct"
+      }
+    },
+    {
+      "name": "AccessBadge",
+      "type": {
+        "fields": [
+          { "name": "version", "type": "u16" },
+          { "name": "context_hash", "type": { "array": ["u8", 32] } },
+          { "name": "presenter_public_key", "type": { "array": ["u8", 32] } },
+          { "name": "claim_number", "type": "u64" },
+          { "name": "proof_issued_at_unix_ms", "type": "u64" }
+        ],
+        "kind": "struct"
+      }
+    }
+  ],
+  "errors": [],
+  "instruction_type": "balance_gate_core::GateInstruction",
+  "instructions": [
+    {
+      "accounts": [
+        { "init": true, "name": "gate", "signer": true, "writable": true }
+      ],
+      "args": [
+        { "name": "context_hash", "type": { "array": ["u8", 32] } },
+        { "name": "token_program_owner", "type": { "array": ["u32", 8] } },
+        { "name": "token_definition_id", "type": { "array": ["u8", 32] } },
+        { "name": "threshold", "type": "u128" },
+        { "name": "expires_at_unix_ms", "type": "u64" },
+        { "name": "challenge_nonce", "type": { "array": ["u8", 32] } }
+      ],
+      "name": "initialize"
+    },
+    {
+      "accounts": [
+        { "init": false, "name": "gate", "signer": false, "writable": true },
+        { "init": true, "name": "badge", "signer": true, "writable": true }
+      ],
+      "args": [
+        { "name": "claim", "type": { "defined": "ClaimAccess" } }
+      ],
+      "name": "claim"
+    }
+  ],
+  "name": "balance_gate",
+  "types": [],
+  "version": "0.1.0"
+}

@@ -1,102 +1,178 @@
 # LEZ TokenStudio ProofGate
 
-No-code private token-gating for Logos Execution Zone.
+No-code token setup and private balance-gated access for Logos Execution Zone.
 
-This project is scoped for **LP-0005: Private Token Balance Attestation**, a
-Large Logos Lambda Prize with a **$1,200** prize. The product keeps the
-TokenStudio angle, but the winning core is not plain token creation. The
-winning core is a reusable private balance attestation primitive: a holder can
-prove they own at least `N` tokens without revealing their account, exact
-balance, nullifier public key, or wider wallet history.
+ProofGate targets **LP-0005: Private Token Balance Attestation**, a **$1,200
+Logos Lambda Prize**. A holder proves that one hidden LEZ fungible-token account
+has at least an exact public threshold without revealing the account ID, exact
+balance, nonce, account data, Merkle path, nullifier key, or wallet history.
 
-## Target Prize
+The product keeps token creation in the issuer workflow. Token creation is setup
+UX; the bounty contribution is the reusable private attestation primitive and
+its on-chain and off-chain consumers.
 
-- **Prize:** LP-0005 Private Token Balance Attestation
-- **Prize amount:** $1,200
-- **Submission route:** Pull request to `logos-co/lambda-prize`
-- **Implementation repo:** `https://github.com/FidelCoder/LEZ-TokenStudio`
+## What Is Implemented
 
-## Adjusted Idea
+- Token select, wallet-backed create/mint adapters, and deterministic gate JSON.
+- Exact LEZ `v0.2.0` private-account commitment, token data, and Merkle proofs.
+- Risc0 3.0.5 guest proving membership, token identity, and
+  `hidden_balance >= threshold`.
+- Fixture and live wallet/sequencer proof input through `getProofsAndRoot`.
+- Real succinct proving guarded against `RISC0_DEV_MODE` and verified on output.
+- Fresh Ed25519 presenter challenges, exact policy checks, deterministic errors,
+  cross-process replay locking, and forwarding rejection.
+- A real SPEL 0.6 `balance_gate` program that recursively verifies the balance
+  receipt, rotates its nonce, and creates a time-bounded access badge.
+- Composition through the official LEZ privacy preserving execution guest,
+  canonical message packaging, badge-account signing, and sequencer RPC
+  submission.
+- Chunked, integrity-checked proof transport over official Logos
+  `chat_module` calls and sender-bound GroupV2 admission.
+- A Basecamp universal `ui_qml` module covering token, gate, prove, verify,
+  Messaging, and on-chain flows.
 
-TokenStudio becomes **ProofGate mode**:
+## Privacy Boundary
 
-1. Issuer creates or selects a LEZ token for a gated community, governance
-   action, fee tier, or allowlist.
-2. Issuer configures a gate: token program owner, threshold, context id, expiry,
-   and verifier identity.
-3. Holder generates a client-side proof that their shielded token balance is at
-   least the configured threshold.
-4. The proof is usable in two paths:
-   - On-chain: a LEZ verifier program gates a protected action.
-   - Off-chain: the proof is sent over Logos Chat/Messaging and verified locally
-     before admitting the holder to a group.
+Public proof claims are limited to the gate context hash, token program owner,
+token definition, threshold, commitment root, presenter public key, issue time,
+and optional expiry. The Risc0 journal never contains the private account ID or
+exact balance. Reusing a presenter key can still create a linkable pseudonym;
+use a separate key per context when unlinkability matters.
 
-Token creation remains a useful demo/onboarding workflow, but it is deliberately
-secondary. LP-0013 covered token authorities and was a $600 prize; LP-0005 is
-the correct $1,200 target because it centers private token balance proofs.
+See [Privacy Model](docs/PRIVACY_MODEL.md) and [Security Policy](SECURITY.md).
 
-## Why This Has Impact
-
-Most token-gated flows leak too much: wallet address, token identity, balance,
-and historical activity. On Logos, balances are private by default, so access
-control needs a private alternative. ProofGate gives apps a reusable primitive
-for:
-
-- private token-gated chat rooms,
-- private governance participation thresholds,
-- private protocol fee tiers,
-- private holder-only dashboards,
-- private allowlist eligibility checks.
-
-The user gets a simple interface, while the system still exercises the hard
-Logos primitives LP-0005 asks for: LEZ private accounts, Merkle membership
-proofs, Risc0 proof generation, on-chain verification, off-chain verification,
-and Logos Messaging.
-
-## Proposed Repository Shape
+## Repository Layout
 
 ```text
-LEZ-TokenStudio/
-├── apps/
-│   └── basecamp-tokenstudio/      # QML + C++ Basecamp UI module
-├── crates/
-│   ├── attestation-types/         # shared proof envelope and journal types
-│   ├── attestation-prover/        # client-side proof generator
-│   ├── attestation-verifier/      # off-chain local verifier
-│   ├── attestation-cli/           # issuer/holder/verifier CLI
-│   ├── lez-compat/                # exact LEZ commitment and Merkle semantics
-│   └── tokenstudio-config/        # token/gate config and wallet adapter
-├── guests/
-│   └── balance-attestation/       # Risc0 guest proving balance >= threshold
-├── programs/
-│   └── balance-gate/              # LEZ verifier program and gated action demo
-├── demos/
-│   └── token-gated-chat/          # Logos Chat/Messaging integration demo
-├── scripts/
-│   └── demo.sh                    # reproducible end-to-end demo
-└── docs/
-    ├── LP-0005_EXECUTION_PLAN.md
-    └── LAMBDA_PRIZE_SUBMISSION.md
+apps/basecamp-tokenstudio/       Basecamp QML module and asynchronous C++ bridge
+crates/attestation-circuit/      Private statement evaluated by host and guest
+crates/attestation-image-id/     Independently pinned balance guest image ID
+crates/attestation-prover/       Wallet/RPC input acquisition and Risc0 prover
+crates/attestation-types/        Versioned journals, envelopes, and challenges
+crates/attestation-verifier/     Local verification and presenter binding
+crates/balance-gate-core/        SPEL wire/state types and on-chain policy
+crates/lez-compat/               Exact LEZ commitment and Merkle compatibility
+crates/lez-gate-sdk/             Gate receipt and official PPE composition
+crates/proofgate-messaging/      Logos Chat transfer and admission adapter
+crates/tokenstudio-config/       Token/gate config and wallet command adapters
+guests/balance-attestation/      Risc0 balance proof guest
+programs/balance-gate/           SPEL gate guest and generated IDL
+demos/token-gated-chat/          Real two-instance encrypted admission demo
+scripts/demo.sh                  End-to-end real-mode demo
 ```
 
-## Current Status
+## Build And Test
 
-The Rust workspace now includes shared attestation types, exact LEZ commitment
-and Merkle compatibility, validated token and gate config files, and a structured
-`proofgate` CLI. Issuers can select or create a token through the official LEZ
-wallet command adapter, mint demo balances, create an asset-specific gate, and
-compute its stable context hash.
+```bash
+cargo build --release -p proofgate
+cargo fmt --all --check
+cargo clippy --workspace --all-targets -- -D warnings
+cargo test --workspace
+```
 
-The Risc0 balance-attestation guest and host prover now generate and verify a
-real succinct receipt with `RISC0_DEV_MODE=0`. The active build step is wallet
-and sequencer proof-input acquisition, followed by challenge-bound verification.
-On-chain verification, Logos Messaging, and the Basecamp interface then consume
-that stable proof format.
+Risc0 tooling 3.0.5 and its guest Rust component are required. The first build
+downloads/compiles a substantial zkVM dependency graph.
 
-## Sources Checked
+Run the complete deterministic workflow:
 
-- Logos Lambda Prize: <https://github.com/logos-co/lambda-prize>
-- LP-0005: <https://github.com/logos-co/lambda-prize/blob/master/prizes/LP-0005.md>
-- Logos Execution Zone: <https://github.com/logos-blockchain/logos-execution-zone>
-- LEZ Wallet UI: <https://github.com/logos-blockchain/logos-execution-zone-wallet-ui>
-- Logos Chat Module: <https://github.com/logos-co/logos-chat-module>
+```bash
+scripts/demo.sh
+```
+
+This defaults to real balance proving and real recursive LEZ composition with
+`RISC0_DEV_MODE=0`; it can take well over an hour on a small CPU. Use
+`RUN_COMPOSITION=0 scripts/demo.sh` for the shorter proof plus actual SPEL
+execution path. Set `ACCOUNT_SNAPSHOT` and `SEQUENCER_URL` to replace the
+deterministic witness with live wallet/sequencer input.
+
+The encrypted network phase requires two initialized Chat instances and is
+enabled with `RUN_MESSAGING=1` plus the variables documented in
+[the chat demo](demos/token-gated-chat/README.md).
+
+## Core CLI Flow
+
+Create or select a token and configure a gate:
+
+```bash
+proofgate token create <token fields> --wallet-binary wallet --output token.json
+proofgate token select <token fields> --output token.json
+proofgate token mint --token token.json --holder <account> --amount 100
+proofgate gate init --token token.json --application-id tokenstudio \
+  --gate-id founders --threshold 100 --verifier-id logos-chat:founders \
+  --output gate.json
+```
+
+Generate and present a private proof:
+
+```bash
+proofgate presenter generate --output presenter.json
+RISC0_DEV_MODE=0 proofgate prove --gate gate.json --input witness.json \
+  --presenter-public-key-hex <64-hex> --output proof.json
+proofgate challenge create --gate gate.json --output challenge.json
+proofgate present --proof proof.json --challenge challenge.json \
+  --presenter-key presenter.json --transport local --output envelope.json
+proofgate verify --gate gate.json --envelope envelope.json \
+  --replay-cache replay-cache.json
+```
+
+Use wallet/sequencer state instead of a fixture:
+
+```bash
+proofgate wallet snapshot --wallet-binary wallet \
+  --account-id <private-account> --output snapshot.json
+RISC0_DEV_MODE=0 proofgate prove --gate gate.json \
+  --account-snapshot snapshot.json --sequencer-url http://127.0.0.1:8080 \
+  --presenter-public-key-hex <64-hex> --output proof.json
+```
+
+## Consumers
+
+The on-chain path deploys the embedded program, initializes gate state, creates
+a badge-account-bound claim, executes the actual SPEL guest, recursively
+composes an official LEZ PPE proof, signs the transaction, and submits it to a
+configured sequencer. See [On-Chain Gate](docs/ON_CHAIN_GATE.md).
+
+The off-chain path splits receipt-sized envelopes into bounded Chat messages,
+verifies them locally, binds one sender address to one GroupV2 ID, and invokes
+`add_group_member` only after `ALLOW`. See
+[Logos Messaging](docs/LOGOS_MESSAGING.md).
+
+The Basecamp module source and `.lgx` build instructions are in
+[apps/basecamp-tokenstudio](apps/basecamp-tokenstudio/README.md).
+
+## Validation Status
+
+A real succinct balance receipt has been generated and verified locally. The
+SPEL guest executes in LEZ's real guest executor, deterministic failures are
+covered, the current IDL is committed, and the Messaging protocol passes a
+receipt-sized 220 KB fixture.
+
+The signed sequencer submission code is implemented and locally unit tested;
+acceptance by a live sequencer, live two-node Messaging, and `.lgx` packaging
+require external runtimes that are not installed in this workspace. They are
+explicitly tracked in [Implementation Status](docs/STATUS.md), not represented
+as completed evidence. Benchmark results and limits are in
+[Benchmarks](docs/BENCHMARKS.md).
+
+## Documentation
+
+- [Architecture](docs/ARCHITECTURE.md)
+- [Circuit Design](docs/CIRCUIT_DESIGN.md)
+- [Prover Inputs](docs/PROVER_INPUTS.md)
+- [Risc0 Proving](docs/RISC0_PROVING.md)
+- [On-Chain Gate](docs/ON_CHAIN_GATE.md)
+- [Logos Messaging](docs/LOGOS_MESSAGING.md)
+- [Error Codes](docs/ERROR_CODES.md)
+- [Token Setup](docs/TOKEN_SETUP.md)
+- [LEZ Compatibility](docs/LEZ_COMPATIBILITY.md)
+- [LP-0005 Execution Plan](docs/LP-0005_EXECUTION_PLAN.md)
+- [Submission Playbook](docs/LAMBDA_PRIZE_SUBMISSION.md)
+
+## Submission Policy
+
+Implementation work is pushed only to
+`FidelCoder/LEZ-TokenStudio:solution/lp-0005-proofgate`. No pull request to the
+Lambda Prize repository will be created until the owner has tested and approved
+the finished implementation.
+
+Licensed under MIT OR Apache-2.0.

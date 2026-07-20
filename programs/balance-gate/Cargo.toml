@@ -1,0 +1,16 @@
+[package]
+name = "balance-gate-methods"
+description = "Embedded LEZ balance-gate program for TokenStudio ProofGate"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[build-dependencies]
+risc0-build.workspace = true
+
+[dev-dependencies]
+spel-framework = { git = "https://github.com/logos-co/spel.git", rev = "0cb7e0980535af619482cf1c823f4d394b3ebd61" }
+
+[package.metadata.risc0]
+methods = ["guest"]

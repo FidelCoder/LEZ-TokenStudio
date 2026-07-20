@@ -1,0 +1,23 @@
+[package]
+name = "lez-gate-sdk"
+description = "Risc0 composition SDK for the TokenStudio LEZ balance-gate program"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+attestation-image-id.workspace = true
+attestation-prover.workspace = true
+attestation-types.workspace = true
+balance-gate-core.workspace = true
+balance-gate-methods.workspace = true
+borsh.workspace = true
+lee.workspace = true
+lee_core.workspace = true
+risc0-zkvm.workspace = true
+thiserror.workspace = true
+
+[dev-dependencies]
+balance-attestation-methods.workspace = true
+ed25519-dalek.workspace = true
