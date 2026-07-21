@@ -63,6 +63,8 @@ ScrollView {
 
         Flow {
             Layout.fillWidth: true
+            spacing: Theme.spacing.medium
+
             Button {
                 text: "Read public key"
                 enabled: !root.busy && presenterKey.text.length > 0
@@ -193,7 +195,7 @@ ScrollView {
                 label: "Verifier ID override (optional)"
                 placeholderText: "Use gate verifier by default"
             }
-            LabeledField { id: challengeTtl; label: "Challenge lifetime (ms)"; text: "60000" }
+            LabeledField { id: challengeTtl; label: "Challenge lifetime (ms)"; text: "300000" }
             LabeledField { id: presentProof; label: "Proof"; text: proofOutput.text }
             LabeledField { id: presentChallenge; label: "Challenge"; text: challengeOutput.text }
             LabeledField { id: presentKey; label: "Presenter key"; text: presenterKey.text }

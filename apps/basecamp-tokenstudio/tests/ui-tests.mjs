@@ -40,6 +40,7 @@ test("ProofGate: navigates every primary workflow", async (app) => {
     "Balance proof",
     "Presentation",
     "witness.json",
+    "300000",
     "Generate proof",
   ]);
 

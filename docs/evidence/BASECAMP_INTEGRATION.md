@@ -49,11 +49,11 @@ The resulting LGX manifest is version `0.1.0`, type `ui_qml`, and declares:
 
 | Local release artifact | SHA-256 |
 | --- | --- |
-| `TokenStudio-ProofGate-v0.1.0.lgx` | `fd71d11a60e90bc864217ec1616b652761c39093a28aaf0f65e6c60e2c18d0bb` |
+| `TokenStudio-ProofGate-v0.1.0.lgx` | `0b25838b07c54be9fae8bb614bbe2a927c80e6a378dc4350886a6ecd2c66d3b9` |
 | `TokenStudio-ProofGate-desktop.png` | `9c81817ca7a4422c310bb24e55b921bdfeb52a09faaa99023454af9fb806f282` |
 
 The manifest root hash is
-`d3c51a9a00977acd04ab8067a359ba170406c2a2eb814eb0d22f6dd0e432d24a`.
+`0b0fe6215972cc7f301cc1f2169e0593bc09d1d2281ad18c0f2522b44c8416ce`.
 The release artifacts are kept outside the Git repository pending owner review
 and publication. Full-client installation, interactive visual review, and a
 narrow-window screenshot remain release evidence rather than claims made by
