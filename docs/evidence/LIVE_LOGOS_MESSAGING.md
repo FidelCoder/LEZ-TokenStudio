@@ -4,6 +4,11 @@ Validated on 2026-07-21 against `logos.test` with two isolated Logos Core
 daemons and `logos-chat-module` revision
 `afb965589afb193a8559faf911233221a681af80`.
 
+This is historical transport and admission evidence from before
+VerificationChallenge v2 added verifier-authorized roots and exact retained
+challenge matching. It does not claim that the current root-bound revision has
+completed the same live network run.
+
 ## Official Chat Baseline
 
 The current official encrypted exchange doctest was run first:

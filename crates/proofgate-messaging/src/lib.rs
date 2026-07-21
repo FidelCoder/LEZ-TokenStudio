@@ -672,6 +672,7 @@ mod tests {
             receipt: vec![42; 220_000],
             challenge: VerificationChallenge::new(
                 context.context_hash(),
+                [9; 32],
                 context.verifier_id,
                 [5; 32],
                 900,

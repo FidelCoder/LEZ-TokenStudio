@@ -39,6 +39,8 @@ jobs:
 
       - name: Validate repository artifacts
         run: |
+          bash -n scripts/ci-local.sh
+          bash -n scripts/ci-standalone-lez.sh
           bash -n scripts/demo.sh
           bash -n demos/token-gated-chat/run.sh
           jq -e . apps/basecamp-tokenstudio/metadata.json >/dev/null
@@ -55,3 +57,66 @@ jobs:
 
       - name: Test
         run: cargo test --workspace
+
+  standalone-lez:
+    name: Standalone LEZ v0.2.0
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - name: Checkout ProofGate
+        uses: actions/checkout@v4
+
+      - name: Checkout pinned LEZ
+        uses: actions/checkout@v4
+        with:
+          repository: logos-blockchain/logos-execution-zone
+          ref: v0.2.0
+          path: logos-execution-zone
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential clang libclang-dev libssl-dev pkg-config
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: 1.94.0
+
+      - name: Cache Risc0 toolchain
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/bin/cargo-risczero
+            ~/.rustup/toolchains/risc0
+            ~/.rustup/update-hashes/risc0
+          key: risc0-3.0.5-rust-1.97.0-${{ runner.os }}-${{ runner.arch }}
+
+      - name: Install Risc0 toolchain
+        run: |
+          if ! cargo risczero --version 2>/dev/null | grep -Fq '3.0.5'; then
+            cargo install cargo-risczero --version 3.0.5 --locked
+          fi
+          if ! rustc +risc0 --version 2>/dev/null | grep -Fq '1.97.0'; then
+            cargo risczero install --version 1.97.0
+          fi
+
+      - name: Cache Rust builds
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: |
+            . -> target
+            logos-execution-zone -> target
+
+      - name: Build standalone LEZ
+        working-directory: logos-execution-zone
+        run: cargo build --release -p sequencer_service --features standalone
+
+      - name: Build ProofGate release
+        run: cargo build --release -p proofgate
+
+      - name: Run real-node integration
+        run: |
+          scripts/ci-standalone-lez.sh \
+            logos-execution-zone/target/release/sequencer_service \
+            logos-execution-zone/lez/sequencer/service/configs/debug/sequencer_config.json

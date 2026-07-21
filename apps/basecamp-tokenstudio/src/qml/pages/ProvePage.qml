@@ -18,7 +18,7 @@ ScrollView {
             root.trackedOperation = ""
     }
 
-    function publicKeyFromOutput(output) {
+    function hexFromOutput(output) {
         const matches = String(output).match(/[0-9a-fA-F]{64}/g)
         return matches && matches.length > 0
             ? matches[matches.length - 1].toLowerCase()
@@ -29,9 +29,13 @@ ScrollView {
         target: root.controller.backend
         function onOperationFinished(success, exitCode, output, error) {
             if (success && root.trackedOperation === "presenter-key") {
-                const publicKey = root.publicKeyFromOutput(output)
+                const publicKey = root.hexFromOutput(output)
                 if (publicKey.length === 64)
                     presenterPublicKey.text = publicKey
+            } else if (success && root.trackedOperation === "challenge-root") {
+                const commitmentRoot = root.hexFromOutput(output)
+                if (commitmentRoot.length === 64)
+                    challengeRoot.text = commitmentRoot
             }
             root.trackedOperation = ""
         }
@@ -189,6 +193,17 @@ ScrollView {
             rowSpacing: Theme.spacing.small
 
             LabeledField { id: challengeGate; label: "Gate config"; text: gateConfig.text }
+            LabeledField {
+                id: challengeSequencerUrl
+                label: "Sequencer URL"
+                text: sequencerUrl.text.length > 0 ? sequencerUrl.text : "http://127.0.0.1:3040"
+            }
+            LabeledField {
+                id: challengeRoot
+                label: "Trusted commitment root (hex)"
+                placeholderText: "64 hexadecimal characters"
+                validator: RegularExpressionValidator { regularExpression: /[0-9a-fA-F]{64}/ }
+            }
             LabeledField { id: challengeOutput; label: "Challenge output"; text: "challenge.json" }
             LabeledField {
                 id: challengeVerifier
@@ -212,12 +227,23 @@ ScrollView {
                 Layout.preferredWidth: 180
             }
             Button {
+                text: "Read sequencer root"
+                enabled: !root.busy && challengeSequencerUrl.text.length > 0
+                onClicked: root.runTracked("challenge-root", "Read trusted commitment root", [
+                    "sequencer-root",
+                    "--sequencer-url", challengeSequencerUrl.text
+                ])
+            }
+            Button {
                 text: "Issue challenge"
-                enabled: !root.busy && challengeGate.text.length > 0
+                enabled: !root.busy
+                    && challengeGate.text.length > 0
+                    && challengeRoot.text.length === 64
                 onClicked: {
                     var args = [
                         "challenge", "create",
                         "--gate", challengeGate.text,
+                        "--commitment-root-hex", challengeRoot.text,
                         "--ttl-ms", challengeTtl.text,
                         "--output", challengeOutput.text
                     ]

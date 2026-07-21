@@ -21,7 +21,8 @@ its on-chain and off-chain consumers.
   with `v0.2.0` `getProofForCommitment` compatibility.
 - Real succinct proving guarded against `RISC0_DEV_MODE` and verified on output.
 - Fresh Ed25519 presenter challenges, exact policy checks, deterministic errors,
-  cross-process replay locking, and forwarding rejection.
+  independently pinned sequencer roots, cross-process replay locking, and
+  forwarding rejection.
 - A real SPEL 0.6 `balance_gate` program that recursively verifies the balance
   receipt, rotates its nonce, and creates a time-bounded access badge.
 - Composition through the official LEZ privacy preserving execution guest,
@@ -39,6 +40,11 @@ token definition, threshold, commitment root, presenter public key, issue time,
 and optional expiry. The Risc0 journal never contains the private account ID or
 exact balance. Reusing a presenter key can still create a linkable pseudonym;
 use a separate key per context when unlinkability matters.
+
+A Merkle proof is only meaningful when its public root comes from a sequencer
+the verifier trusts. Off-chain challenges therefore commit to a root obtained
+independently by the verifier, and on-chain GateState stores the operator's
+authorized root. A root supplied only by the proof holder is never trusted.
 
 See [Privacy Model](docs/PRIVACY_MODEL.md) and [Security Policy](SECURITY.md).
 
@@ -66,9 +72,7 @@ scripts/demo.sh                  End-to-end real-mode demo
 
 ```bash
 cargo build --release -p proofgate
-cargo fmt --all --check
-cargo clippy --workspace --all-targets -- -D warnings
-cargo test --workspace
+scripts/ci-local.sh
 ```
 
 Risc0 tooling 3.0.5 and its guest Rust component are required. The first build
@@ -109,10 +113,14 @@ Generate and present a private proof:
 proofgate presenter generate --output presenter.json
 RISC0_DEV_MODE=0 proofgate prove --gate gate.json --input witness.json \
   --presenter-public-key-hex <64-hex> --output proof.json
-proofgate challenge create --gate gate.json --output challenge.json
+COMMITMENT_ROOT=$(proofgate sequencer-root \
+  --sequencer-url http://127.0.0.1:3040)
+proofgate challenge create --gate gate.json \
+  --commitment-root-hex "$COMMITMENT_ROOT" --output challenge.json
 proofgate present --proof proof.json --challenge challenge.json \
   --presenter-key presenter.json --transport local --output envelope.json
 proofgate verify --gate gate.json --envelope envelope.json \
+  --challenge challenge.json \
   --replay-cache replay-cache.json
 ```
 
@@ -147,18 +155,21 @@ A real succinct balance receipt has been generated and verified locally. The
 SPEL guest executes in LEZ's real guest executor, deterministic failures are
 covered, the current IDL is committed, and the Messaging protocol passes a
 receipt-sized 220 KB fixture. The final gate ELF has also been deployed to an
-exact standalone LEZ `v0.2.0` sequencer; its initialization transaction was
-included and the resulting program-owned state was fetched and decoded. The
+exact standalone LEZ `v0.2.0` sequencer; a root-bound initialization
+transaction was included and the resulting program-owned GateState v2 was
+fetched and decoded. A reproducible CI script performs that node lifecycle,
+membership query, deployment, initialization, inclusion, and state check. The
 official two-node Chat doctest passed 20/20, and a fresh real proof completed
 encrypted challenge delivery, 11-message proof transfer, local verification,
-GroupV2 admission, forwarding denial, and replay denial. The installable LGX
-also passed all four official Logos Qt integration tests and produced a
-non-empty 1024 by 768 render.
+GroupV2 admission, forwarding denial, and replay denial under the prior
+challenge revision. The root-bound v2 network run remains tracked explicitly.
 
 The signed private claim path is implemented and locally unit tested, while a
 fresh recursively composed claim still requires prover acceleration to fit the
-ten-minute validity window. Full-client Basecamp installation and narrow-window
-review, testnet/cost evidence, the narrated video, and owner approval remain
+ten-minute validity window. An earlier Basecamp package passed all four official
+Logos Qt integration tests and rendered a non-empty 1024 by 768 view; the
+root-control revision still needs a fresh package run and full-client review.
+Testnet/cost evidence, the narrated video, and owner approval also remain
 external work. They are explicitly tracked in [Implementation
 Status](docs/STATUS.md), not represented as completed evidence. Benchmark
 results and limits are in
@@ -183,9 +194,9 @@ results and limits are in
 
 ## Submission Policy
 
-Implementation work is pushed only to
-`FidelCoder/LEZ-TokenStudio:solution/lp-0005-proofgate`. No pull request to the
-Lambda Prize repository will be created until the owner has tested and approved
-the finished implementation.
+Implementation work is pushed to `FidelCoder/LEZ-TokenStudio:main`; the
+`solution/lp-0005-proofgate` history was merged into that default branch. No
+pull request to the Lambda Prize repository will be created until the owner has
+tested and approved the finished implementation.
 
 Licensed under MIT OR Apache-2.0.

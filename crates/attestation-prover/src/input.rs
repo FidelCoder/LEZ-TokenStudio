@@ -122,6 +122,12 @@ pub async fn prove_live(
     })
 }
 
+pub async fn fetch_sequencer_commitment_root(sequencer_url: &str) -> Result<Digest32, InputError> {
+    Ok(fetch_sequencer_input(&LezAccount::default(), sequencer_url)
+        .await?
+        .commitment_root)
+}
+
 pub async fn fetch_sequencer_input(
     account: &LezAccount,
     sequencer_url: &str,
@@ -448,5 +454,11 @@ mod tests {
             .unwrap();
 
         input.validate_membership().unwrap();
+        assert_eq!(
+            fetch_sequencer_commitment_root(&sequencer_url)
+                .await
+                .unwrap(),
+            input.commitment_root
+        );
     }
 }

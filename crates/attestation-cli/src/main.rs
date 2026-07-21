@@ -7,8 +7,9 @@ use std::{
 };
 
 use attestation_prover::{
-    capture_wallet_snapshot, dev_mode_status, prove_live, prove_request, read_private_snapshot,
-    read_prover_input, write_private_snapshot, write_proof, DevModeStatus, ProofRequest,
+    capture_wallet_snapshot, dev_mode_status, fetch_sequencer_commitment_root, prove_live,
+    prove_request, read_private_snapshot, read_prover_input, write_private_snapshot, write_proof,
+    DevModeStatus, ProofRequest,
 };
 use attestation_types::{
     digest_from_hex, digest_to_hex, program_owner_from_hex, program_owner_to_hex, GateContext,
@@ -48,6 +49,7 @@ struct Cli {
 enum Command {
     Version,
     ContextHash(ContextArgs),
+    SequencerRoot(SequencerRootArgs),
     Prove(ProveArgs),
     Present(PresentArgs),
     Verify(VerifyArgs),
@@ -95,6 +97,8 @@ enum MessagingCommand {
 struct MessagingAdmissionChallengeArgs {
     #[arg(long)]
     gate: PathBuf,
+    #[arg(long)]
+    commitment_root_hex: String,
     #[arg(long)]
     group_id: String,
     #[arg(long)]
@@ -190,6 +194,8 @@ struct MessagingReceiveVerifyArgs {
     #[arg(long)]
     gate: PathBuf,
     #[arg(long)]
+    challenge: PathBuf,
+    #[arg(long)]
     replay_cache: PathBuf,
     #[arg(long)]
     verifier_id: Option<String>,
@@ -257,6 +263,8 @@ struct OnChainDeployArgs {
 struct OnChainInitArgs {
     #[arg(long)]
     gate: PathBuf,
+    #[arg(long)]
+    commitment_root_hex: String,
     #[arg(long)]
     challenge_nonce_hex: String,
     #[arg(long)]
@@ -366,6 +374,8 @@ struct ChallengeCreateArgs {
     #[arg(long)]
     gate: PathBuf,
     #[arg(long)]
+    commitment_root_hex: String,
+    #[arg(long)]
     verifier_id: Option<String>,
     #[arg(long, default_value_t = 60_000)]
     ttl_ms: u64,
@@ -412,6 +422,8 @@ struct VerifyArgs {
     gate: PathBuf,
     #[arg(long)]
     envelope: PathBuf,
+    #[arg(long)]
+    challenge: PathBuf,
     #[arg(long)]
     replay_cache: PathBuf,
     #[arg(long)]
@@ -559,6 +571,12 @@ struct GateInitArgs {
 }
 
 #[derive(Debug, Args)]
+struct SequencerRootArgs {
+    #[arg(long)]
+    sequencer_url: String,
+}
+
+#[derive(Debug, Args)]
 struct ContextArgs {
     #[arg(long)]
     application_id: String,
@@ -595,6 +613,12 @@ async fn run(cli: Cli) -> Result<(), String> {
                 digest_to_hex(&context_from_args(args)?.context_hash())
             );
         }
+        Command::SequencerRoot(args) => {
+            let root = fetch_sequencer_commitment_root(&args.sequencer_url)
+                .await
+                .map_err(|error| error.to_string())?;
+            println!("{}", digest_to_hex(&root));
+        }
         Command::Prove(args) => run_prove(args).await?,
         Command::Present(args) => run_present(args)?,
         Command::Verify(args) => run_verify(args)?,
@@ -612,9 +636,12 @@ async fn run(cli: Cli) -> Result<(), String> {
 fn run_messaging_command(command: MessagingCommand) -> Result<(), String> {
     match command {
         MessagingCommand::AdmissionChallenge(args) => {
+            let commitment_root = digest_from_hex(&args.commitment_root_hex)
+                .map_err(|error| format!("invalid --commitment-root-hex: {error}"))?;
             let now = args.now_unix_ms.unwrap_or(now_unix_ms()?);
             let challenge = issue_admission_challenge(
                 &args.gate,
+                commitment_root,
                 &args.group_id,
                 &args.member_address,
                 now,
@@ -703,6 +730,7 @@ fn run_messaging_command(command: MessagingCommand) -> Result<(), String> {
             println!("Envelope written to {}", args.output.display());
         }
         MessagingCommand::ReceiveVerify(args) => {
+            let expected_challenge = read_verification_challenge(&args.challenge)?;
             let mut receive = args.receive.clone();
             let admission = match (&args.admit_group_id, &args.admit_address) {
                 (None, None) => None,
@@ -739,6 +767,7 @@ fn run_messaging_command(command: MessagingCommand) -> Result<(), String> {
             let outcome = verify_received_presentation(
                 &args.gate,
                 &envelope,
+                &expected_challenge,
                 &args.replay_cache,
                 args.verifier_id.as_deref(),
                 now,
@@ -814,11 +843,18 @@ async fn run_on_chain_command(command: OnChainCommand) -> Result<(), String> {
             println!("Transaction hash: {transaction_hash}");
         }
         OnChainCommand::Init(args) => {
+            let commitment_root = digest_from_hex(&args.commitment_root_hex)
+                .map_err(|error| format!("invalid --commitment-root-hex: {error}"))?;
             let nonce = digest_from_hex(&args.challenge_nonce_hex)
                 .map_err(|error| format!("invalid --challenge-nonce-hex: {error}"))?;
-            let state = initialize_on_chain_state(&args.gate, nonce, &args.output)?;
+            let state =
+                initialize_on_chain_state(&args.gate, commitment_root, nonce, &args.output)?;
             println!("On-chain gate state written to {}", args.output.display());
             println!("Context hash: {}", digest_to_hex(&state.context_hash));
+            println!(
+                "Authorized commitment root: {}",
+                digest_to_hex(&state.commitment_root)
+            );
             println!(
                 "Program ID: {}",
                 program_owner_to_hex(&balance_gate_program_id())
@@ -988,9 +1024,12 @@ fn run_presenter_command(command: PresenterCommand) -> Result<(), String> {
 fn run_challenge_command(command: ChallengeCommand) -> Result<(), String> {
     match command {
         ChallengeCommand::Create(args) => {
+            let commitment_root = digest_from_hex(&args.commitment_root_hex)
+                .map_err(|error| format!("invalid --commitment-root-hex: {error}"))?;
             let now = args.now_unix_ms.unwrap_or(now_unix_ms()?);
             let challenge = issue_challenge(
                 &args.gate,
+                commitment_root,
                 args.verifier_id.as_deref(),
                 now,
                 args.ttl_ms,
@@ -1026,6 +1065,7 @@ fn run_verify(args: VerifyArgs) -> Result<(), String> {
     let outcome = verify_presentation(
         &args.gate,
         &args.envelope,
+        &args.challenge,
         &args.replay_cache,
         args.verifier_id.as_deref(),
         now,
@@ -1111,6 +1151,10 @@ async fn run_prove(args: ProveArgs) -> Result<(), String> {
     println!(
         "Context hash: {}",
         digest_to_hex(&proof.journal.context_hash)
+    );
+    println!(
+        "Commitment root: {}",
+        digest_to_hex(&proof.journal.commitment_root)
     );
     println!("Receipt bytes: {}", proof.receipt.len());
     Ok(())
@@ -1311,6 +1355,59 @@ mod tests {
                 command: MessagingCommand::ReceiveChallenge(_)
             }
         ));
+    }
+
+    #[test]
+    fn parses_trusted_root_commands() {
+        let root = "11".repeat(32);
+        let challenge = Cli::try_parse_from([
+            "proofgate",
+            "challenge",
+            "create",
+            "--gate",
+            "gate.json",
+            "--commitment-root-hex",
+            &root,
+            "--output",
+            "challenge.json",
+        ])
+        .unwrap();
+        assert!(matches!(
+            challenge.command,
+            Command::Challenge {
+                command: ChallengeCommand::Create(_)
+            }
+        ));
+
+        let initialization = Cli::try_parse_from([
+            "proofgate",
+            "on-chain",
+            "init",
+            "--gate",
+            "gate.json",
+            "--commitment-root-hex",
+            &root,
+            "--challenge-nonce-hex",
+            &root,
+            "--output",
+            "state.json",
+        ])
+        .unwrap();
+        assert!(matches!(
+            initialization.command,
+            Command::OnChain {
+                command: OnChainCommand::Init(_)
+            }
+        ));
+
+        let sequencer = Cli::try_parse_from([
+            "proofgate",
+            "sequencer-root",
+            "--sequencer-url",
+            "http://127.0.0.1:3040",
+        ])
+        .unwrap();
+        assert!(matches!(sequencer.command, Command::SequencerRoot(_)));
     }
 
     #[test]

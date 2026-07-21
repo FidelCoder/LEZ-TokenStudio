@@ -27,6 +27,7 @@ mod balance_gate {
         token_program_owner: [u32; 8],
         token_definition_id: [u8; 32],
         threshold: u128,
+        commitment_root: [u8; 32],
         expires_at_unix_ms: u64,
         challenge_nonce: [u8; 32],
     ) -> SpelResult {
@@ -35,6 +36,7 @@ mod balance_gate {
             token_program_owner,
             token_definition_id,
             threshold,
+            commitment_root,
             (expires_at_unix_ms != 0).then_some(expires_at_unix_ms),
             challenge_nonce,
         );

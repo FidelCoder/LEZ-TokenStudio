@@ -9,7 +9,7 @@
 
 TokenStudio ProofGate is a reusable private LEZ token-balance attestation
 primitive with two consumers. A Risc0 guest proves that a committed private
-fungible-token account belongs to the current LEZ commitment tree and has
+fungible-token account belongs to a verifier-authorized LEZ commitment tree and has
 `balance >= threshold` without revealing the account ID, exact balance,
 nonce, account data, nullifier key, or Merkle path.
 
@@ -23,7 +23,7 @@ proof, signs the canonical transaction, and submits it to a sequencer.
 ## Repository
 
 - **Repo:** <https://github.com/FidelCoder/LEZ-TokenStudio>
-- **Implementation branch:** `solution/lp-0005-proofgate`
+- **Default implementation branch:** `main`
 - **License:** MIT OR Apache-2.0
 
 ## Approach
@@ -32,6 +32,13 @@ The balance statement mirrors LEZ `v0.2.0` commitment and Merkle semantics
 instead of introducing a parallel token representation. Private witness fields
 are consumed by the guest; only token policy, threshold, root, context,
 presenter key, and time policy enter the public journal.
+
+The holder does not choose which Merkle root is trusted. For off-chain use, the
+verifier independently queries its selected sequencer, commits that root into
+VerificationChallenge v2, retains the challenge, and requires the envelope to
+match it exactly. For on-chain use, the operator persists the authorized root
+in GateState v2. Both consumers reject a cryptographically valid receipt for
+any other root with code `1013`.
 
 Proof forwarding is handled in layers. The receipt commits a presenter
 Ed25519 key. Off-chain presentations sign a fresh verifier challenge and use a
@@ -59,6 +66,10 @@ availability dependency.
 - [x] Receipt verification does not reveal account identity, exact balance,
   nullifier key, nonce, data, or Merkle path.
 - [x] Proof journal is bound to an asset-specific gate context.
+- [x] Off-chain challenges and on-chain state pin a verifier-authorized
+  sequencer root and reject a prover-selected tree.
+- [x] Off-chain verification requires the exact retained verifier-issued
+  challenge, preventing holder-created challenge substitution.
 - [x] Presenter-key signatures prevent use by a recipient who only copies the
   proof.
 - [x] Circuit and tests target the exact LEZ `v0.2.0` commitment format.
@@ -76,14 +87,20 @@ availability dependency.
   been measured.
 - [x] Deploy the final gate ELF to an exact local LEZ `v0.2.0` sequencer,
   include initialization, and decode the authoritative GateState.
-- [x] Build an installable Basecamp `.lgx` from the module source.
-- [x] Pass the official Logos Qt integration suite with backend loading,
-  complete workflow navigation, and a non-empty desktop render.
+- [x] Build an installable Basecamp `.lgx` from the pre-root-control module
+  revision.
+- [ ] Rebuild the current root-control Basecamp `.lgx` and rerun the official
+  Logos Qt integration suite.
+- [x] Add a reproducible CI integration job that builds and exercises a pinned
+  standalone LEZ `v0.2.0` node.
 - [ ] Publish a green CI run from the final public/default branch.
 - [ ] Load the Basecamp `.lgx` in the full client and capture narrow-window
   visual-review evidence.
 - [x] Run the encrypted two-instance Chat demo with a real proof and record the
-  asynchronous GroupV2 membership commit plus forwarding/replay denial.
+  asynchronous GroupV2 membership commit plus forwarding/replay denial for the
+  prior challenge revision.
+- [ ] Rerun that live Chat demo with VerificationChallenge v2 root and exact
+  issued-challenge enforcement.
 - [ ] Run a fresh `claim-submit` against the standalone sequencer with an
   accelerated prover; record claim inclusion, badge state, rotation, and replay
   rejection.
@@ -114,7 +131,8 @@ streamed output, cancellation, and persisted binary configuration.
 All untrusted proof and message fields are bounded and validated before
 cryptographic verification. Replay state is atomically replaced under an
 exclusive lock. On-chain submission refetches account state and rejects a gate
-that changed after claim signing. Stable denial codes are documented.
+that changed after claim signing. Off-chain and on-chain consumers independently
+authorize the journal's commitment root. Stable denial codes are documented.
 
 ### Performance
 
@@ -129,15 +147,18 @@ composition timings remain required.
 
 ### Supportability
 
-The final local gate program ID is
-`e776135f1f7ebf2dd810c232bd2d3cd75217b44407e12df1c0b1f5fbcf031337`.
-Its deployment and initialization were included by an exact standalone LEZ
-`v0.2.0` node; the decoded gate state has claim counter zero.
+The root-bound local gate program ID is
+`19936a0b1174095ae7c5978d1ee547741b81c01d6432e167c02a8a84fcec9a0d`.
+Its deployment and GateState v2 initialization were included by an exact
+standalone LEZ `v0.2.0` node; the decoded state contains the independently
+queried root and claim counter zero.
 
 The workspace is split into versioned types, compatibility, circuit, prover,
 verifier, gate, Messaging, configuration, and CLI crates. Local evidence
-includes strict formatting, strict Clippy, 69 passing unit tests, generated-IDL
-equality, shell syntax checks, and explicit external-validation tracking.
+includes strict formatting, strict Clippy, 72 passing tests plus two
+explicitly ignored live/real-prover tests, generated-IDL equality, shell syntax
+checks, a clean-node integration script, and explicit external-validation
+tracking.
 
 ## Supporting Materials
 
@@ -153,7 +174,7 @@ equality, shell syntax checks, and explicit external-validation tracking.
 - [Official Basecamp integration evidence](evidence/BASECAMP_INTEGRATION.md)
 - **Narrated demo:** TODO
 - **Verified local program ID:**
-  `e776135f1f7ebf2dd810c232bd2d3cd75217b44407e12df1c0b1f5fbcf031337`
+  `19936a0b1174095ae7c5978d1ee547741b81c01d6432e167c02a8a84fcec9a0d`
 - **Verified testnet program ID:** TODO
 - **CI run:** TODO
 

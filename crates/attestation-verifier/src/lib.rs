@@ -31,6 +31,7 @@ pub enum VerificationErrorCode {
     ReplayedChallenge = 1010,
     MalformedEnvelope = 1011,
     InvalidProofTime = 1012,
+    UntrustedCommitmentRoot = 1013,
 }
 
 #[derive(Debug, Error, PartialEq, Eq)]
@@ -45,6 +46,8 @@ pub enum VerificationError {
     WrongToken,
     #[error("proof threshold does not equal the gate threshold")]
     WrongThreshold,
+    #[error("proof commitment root was not authorized by the verifier")]
+    UntrustedCommitmentRoot,
     #[error("proof has expired")]
     ExpiredProof,
     #[error("challenge is malformed or has an invalid time window")]
@@ -72,6 +75,7 @@ impl VerificationError {
             Self::WrongContext => VerificationErrorCode::WrongContext,
             Self::WrongToken => VerificationErrorCode::WrongToken,
             Self::WrongThreshold => VerificationErrorCode::WrongThreshold,
+            Self::UntrustedCommitmentRoot => VerificationErrorCode::UntrustedCommitmentRoot,
             Self::ExpiredProof => VerificationErrorCode::ExpiredProof,
             Self::InvalidChallenge => VerificationErrorCode::InvalidChallenge,
             Self::ExpiredChallenge => VerificationErrorCode::ExpiredChallenge,
@@ -94,6 +98,7 @@ pub struct VerifiedAttestation {
 
 pub struct VerifyRequest<'a> {
     pub envelope: &'a AttestationEnvelope,
+    pub expected_challenge: &'a VerificationChallenge,
     pub expected_gate: &'a GateConfig,
     pub expected_verifier_id: &'a str,
     pub now_unix_ms: u64,
@@ -133,6 +138,7 @@ impl InMemoryReplayCache {
 
 pub fn create_challenge(
     gate: &GateConfig,
+    expected_commitment_root: Digest32,
     verifier_id: &str,
     now_unix_ms: u64,
     ttl_ms: u64,
@@ -142,7 +148,7 @@ pub fn create_challenge(
     if verifier_id != gate.context.verifier_id {
         return Err(VerificationError::WrongVerifier);
     }
-    if ttl_ms == 0 || ttl_ms > MAX_CHALLENGE_TTL_MS {
+    if expected_commitment_root == [0; 32] || ttl_ms == 0 || ttl_ms > MAX_CHALLENGE_TTL_MS {
         return Err(VerificationError::InvalidChallenge);
     }
     let expires_at_unix_ms = now_unix_ms
@@ -153,6 +159,7 @@ pub fn create_challenge(
 
     Ok(VerificationChallenge::new(
         gate.context_hash(),
+        expected_commitment_root,
         verifier_id.to_owned(),
         nonce,
         now_unix_ms,
@@ -169,6 +176,9 @@ pub fn present(
     let presenter_public_key = signing_key.verifying_key().to_bytes();
     if proof.journal.presenter_public_key != presenter_public_key {
         return Err(VerificationError::BadPresenter);
+    }
+    if proof.journal.commitment_root != challenge.expected_commitment_root {
+        return Err(VerificationError::UntrustedCommitmentRoot);
     }
     if proof.journal.context_hash != challenge.gate_context_hash {
         return Err(VerificationError::WrongContext);
@@ -220,6 +230,9 @@ fn validate_claims_and_signature(request: &VerifyRequest<'_>) -> Result<(), Veri
     let challenge = &envelope.challenge;
     let expected_context_hash = request.expected_gate.context_hash();
 
+    if challenge != request.expected_challenge {
+        return Err(VerificationError::InvalidChallenge);
+    }
     if envelope.journal.version != ATTESTATION_JOURNAL_VERSION {
         return Err(VerificationError::MalformedEnvelope);
     }
@@ -244,6 +257,9 @@ fn validate_claims_and_signature(request: &VerifyRequest<'_>) -> Result<(), Veri
         || envelope.journal.context_hash != expected_context_hash
     {
         return Err(VerificationError::WrongContext);
+    }
+    if envelope.journal.commitment_root != challenge.expected_commitment_root {
+        return Err(VerificationError::UntrustedCommitmentRoot);
     }
     if envelope.journal.token_program_owner != request.expected_gate.context.token_program_owner
         || envelope.journal.token_definition_id != request.expected_gate.context.token_definition_id
@@ -347,6 +363,7 @@ mod tests {
         let signing_key = SigningKey::from_bytes(&[3; 32]);
         let challenge = VerificationChallenge::new(
             gate.context_hash(),
+            [8; 32],
             gate.context.verifier_id.clone(),
             [5; 32],
             1_000,
@@ -359,8 +376,10 @@ mod tests {
             ProofTransport::LogosMessaging,
         )
         .unwrap();
+        let expected_challenge = envelope.challenge.clone();
         let request = VerifyRequest {
             envelope: &envelope,
+            expected_challenge: &expected_challenge,
             expected_gate: &gate,
             expected_verifier_id: &gate.context.verifier_id,
             now_unix_ms: 1_200,
@@ -372,19 +391,21 @@ mod tests {
         forwarded.challenge.nonce[0] ^= 1;
         let request = VerifyRequest {
             envelope: &forwarded,
+            expected_challenge: &expected_challenge,
             expected_gate: &gate,
             expected_verifier_id: &gate.context.verifier_id,
             now_unix_ms: 1_200,
         };
         assert_eq!(
             validate_claims_and_signature(&request).unwrap_err(),
-            VerificationError::BadPresenter
+            VerificationError::InvalidChallenge
         );
 
         let mut swapped_receipt = envelope;
         swapped_receipt.receipt[0] ^= 1;
         let request = VerifyRequest {
             envelope: &swapped_receipt,
+            expected_challenge: &expected_challenge,
             expected_gate: &gate,
             expected_verifier_id: &gate.context.verifier_id,
             now_unix_ms: 1_200,
@@ -396,12 +417,54 @@ mod tests {
     }
 
     #[test]
+    fn verifier_rejects_a_holder_substituted_challenge() {
+        let gate = gate();
+        let signing_key = SigningKey::from_bytes(&[3; 32]);
+        let issued_challenge = VerificationChallenge::new(
+            gate.context_hash(),
+            [8; 32],
+            gate.context.verifier_id.clone(),
+            [5; 32],
+            1_000,
+            1_500,
+        );
+        let holder_challenge = VerificationChallenge::new(
+            gate.context_hash(),
+            [8; 32],
+            gate.context.verifier_id.clone(),
+            [6; 32],
+            1_000,
+            1_500,
+        );
+        let envelope = present(
+            &proof(&signing_key),
+            holder_challenge,
+            &signing_key,
+            ProofTransport::Local,
+        )
+        .unwrap();
+        let request = VerifyRequest {
+            envelope: &envelope,
+            expected_challenge: &issued_challenge,
+            expected_gate: &gate,
+            expected_verifier_id: &gate.context.verifier_id,
+            now_unix_ms: 1_200,
+        };
+
+        assert_eq!(
+            validate_claims_and_signature(&request).unwrap_err(),
+            VerificationError::InvalidChallenge
+        );
+    }
+
+    #[test]
     fn presenter_key_must_match_key_committed_in_proof() {
         let proof_key = SigningKey::from_bytes(&[3; 32]);
         let other_key = SigningKey::from_bytes(&[4; 32]);
         let gate = gate();
         let challenge = VerificationChallenge::new(
             gate.context_hash(),
+            [8; 32],
             gate.context.verifier_id.clone(),
             [5; 32],
             1_000,
@@ -421,11 +484,37 @@ mod tests {
     }
 
     #[test]
+    fn presentation_rejects_a_prover_selected_commitment_root() {
+        let signing_key = SigningKey::from_bytes(&[3; 32]);
+        let gate = gate();
+        let challenge = VerificationChallenge::new(
+            gate.context_hash(),
+            [7; 32],
+            gate.context.verifier_id.clone(),
+            [5; 32],
+            1_000,
+            1_500,
+        );
+
+        assert_eq!(
+            present(
+                &proof(&signing_key),
+                challenge,
+                &signing_key,
+                ProofTransport::Local
+            )
+            .unwrap_err(),
+            VerificationError::UntrustedCommitmentRoot
+        );
+    }
+
+    #[test]
     fn challenge_expiry_and_verifier_are_enforced() {
         let gate = gate();
         let signing_key = SigningKey::from_bytes(&[3; 32]);
         let challenge = VerificationChallenge::new(
             gate.context_hash(),
+            [8; 32],
             gate.context.verifier_id.clone(),
             [5; 32],
             1_000,
@@ -441,6 +530,7 @@ mod tests {
 
         let expired = VerifyRequest {
             envelope: &envelope,
+            expected_challenge: &envelope.challenge,
             expected_gate: &gate,
             expected_verifier_id: &gate.context.verifier_id,
             now_unix_ms: 1_101,
@@ -452,6 +542,7 @@ mod tests {
 
         let wrong_verifier = VerifyRequest {
             envelope: &envelope,
+            expected_challenge: &envelope.challenge,
             expected_gate: &gate,
             expected_verifier_id: "other-verifier",
             now_unix_ms: 1_050,
@@ -468,6 +559,7 @@ mod tests {
         let signing_key = SigningKey::from_bytes(&[3; 32]);
         let challenge = VerificationChallenge::new(
             gate.context_hash(),
+            [8; 32],
             gate.context.verifier_id.clone(),
             [5; 32],
             700_000,
@@ -482,6 +574,7 @@ mod tests {
         .unwrap();
         let request = VerifyRequest {
             envelope: &envelope,
+            expected_challenge: &envelope.challenge,
             expected_gate: &gate,
             expected_verifier_id: &gate.context.verifier_id,
             now_unix_ms: 700_100,
@@ -495,6 +588,7 @@ mod tests {
         future_proof.journal.issued_at_unix_ms = 100_000;
         let challenge = VerificationChallenge::new(
             gate.context_hash(),
+            [8; 32],
             gate.context.verifier_id.clone(),
             [6; 32],
             1_000,
@@ -509,6 +603,7 @@ mod tests {
         .unwrap();
         let request = VerifyRequest {
             envelope: &envelope,
+            expected_challenge: &envelope.challenge,
             expected_gate: &gate,
             expected_verifier_id: &gate.context.verifier_id,
             now_unix_ms: 1_200,
@@ -543,17 +638,24 @@ mod tests {
     #[test]
     fn challenge_factory_enforces_ttl_and_verifier() {
         let gate = gate();
-        let first = create_challenge(&gate, &gate.context.verifier_id, 1_000, 1_000).unwrap();
-        let second = create_challenge(&gate, &gate.context.verifier_id, 1_000, 1_000).unwrap();
+        let first =
+            create_challenge(&gate, [8; 32], &gate.context.verifier_id, 1_000, 1_000).unwrap();
+        let second =
+            create_challenge(&gate, [8; 32], &gate.context.verifier_id, 1_000, 1_000).unwrap();
 
         assert_ne!(first.nonce, second.nonce);
         assert_eq!(
-            create_challenge(&gate, "other", 1_000, 1_000).unwrap_err(),
+            create_challenge(&gate, [0; 32], &gate.context.verifier_id, 1_000, 1_000,).unwrap_err(),
+            VerificationError::InvalidChallenge
+        );
+        assert_eq!(
+            create_challenge(&gate, [8; 32], "other", 1_000, 1_000).unwrap_err(),
             VerificationError::WrongVerifier
         );
         assert_eq!(
             create_challenge(
                 &gate,
+                [8; 32],
                 &gate.context.verifier_id,
                 1_000,
                 MAX_CHALLENGE_TTL_MS + 1,

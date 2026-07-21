@@ -1,6 +1,6 @@
 # Local LEZ v0.2.0 Evidence
 
-Date: 2026-07-20
+Date: 2026-07-21
 
 This record covers the final ProofGate gate ELF against a standalone Logos
 Execution Zone node built from tag `v0.2.0`, commit `a58fbce2`. The node ran
@@ -15,18 +15,21 @@ on `http://127.0.0.1:3040` with a 15-second block interval.
   derived the same root through `MembershipProof::compute_root`.
 - The ignored live integration test
   `pinned_v0_2_sequencer_membership_fallback` passed against this node.
-- `sendTransaction` accepted the final deployment and initialization.
+- `sequencer-root` independently derived the selected node's root from its
+  proof for the protocol default account anchor.
+- `sendTransaction` accepted the root-bound deployment and initialization.
 
 ## Included Transactions
 
 | Item | Value |
 | --- | --- |
-| Final program ID | `e776135f1f7ebf2dd810c232bd2d3cd75217b44407e12df1c0b1f5fbcf031337` |
-| Deployment transaction | `61392cd68030c6d4b183dd9628885a683aa80cbaff6a2d72c5af1f80a344c276` |
-| Deployment block | `79` |
-| Gate account | `c4dc2f3eea999dbeccf2f4c04c881874b2cc4d5cae231c8caca10034830cf4de` |
-| Initialization transaction | `0bd827648a9a5095cf8fd453c234c872e591313f0dbc629a1672145a50bc9d39` |
-| Initialization block | `84` |
+| Sequencer root | `d4e0961e5e2774178dad46069bfb7cd610b883417f7ce07475c9c61d3b45575f` |
+| Root-bound program ID | `19936a0b1174095ae7c5978d1ee547741b81c01d6432e167c02a8a84fcec9a0d` |
+| Deployment transaction | `d09c590a68e3754908d4bdb87e8dfc2152cf15636ae011d3d23a65094e293a66` |
+| Gate account | `514a3e3cd0f1ea199afddcf48e1bf90372439cccc4090c2e95d815f03f94cd79` |
+| Initialization transaction | `8f73d4a79715a1069ea2c3e9ee66ff94030cf2d9bd57ee27856fd4f66aa8bc96` |
+| Inclusion observation | both transactions queryable by height `21` |
+| Decoded GateState version | `2` |
 | Decoded context hash | `c8136d53893ad946bec8cbe7a4bdb4734618d7290fa2ef685f18bacc06f55c95` |
 | Decoded claim counter | `0` |
 
@@ -35,12 +38,22 @@ The authoritative state was fetched with:
 ```bash
 proofgate on-chain fetch-state \
   --sequencer-url http://127.0.0.1:3040 \
-  --gate-account-id-hex c4dc2f3eea999dbeccf2f4c04c881874b2cc4d5cae231c8caca10034830cf4de \
+  --gate-account-id-hex 514a3e3cd0f1ea199afddcf48e1bf90372439cccc4090c2e95d815f03f94cd79 \
   --output gate-state.json
 ```
 
 The decoded state matched the submitted token owner, token definition,
-threshold `100`, context hash, challenge nonce, and claim counter.
+threshold `100`, context hash, challenge nonce, claim counter, and the
+independently queried commitment root.
+
+## Reproducible Integration
+
+`scripts/ci-standalone-lez.sh` starts a clean temporary node, queries the
+root, runs the ignored live membership test, deploys the actual embedded ELF,
+initializes a root-bound GateState, waits for both transactions, fetches the
+authoritative state, and checks its version, root, and counter. That clean run
+also completed on 2026-07-21. The script is wired into the
+`Standalone LEZ v0.2.0` GitHub Actions job.
 
 ## Ownership Finding
 
@@ -69,8 +82,9 @@ badge.
 
 ## Boundary
 
-This evidence proves exact-version compatibility, program deployment,
-initialization inclusion, ownership behavior, and authoritative state decoding.
-It does not claim private claim inclusion, an issued badge, compute units,
-testnet deployment, or transaction cost. Those require recursive composition
+This evidence proves exact-version compatibility, independent root
+acquisition, program deployment, root-bound initialization inclusion, ownership
+behavior, and authoritative state decoding. It does not claim private claim
+inclusion, an issued badge, compute units, testnet deployment, or transaction
+cost. Those require a matching private token holder plus recursive composition
 inside ProofGate's ten-minute validity window and remain separately tracked.

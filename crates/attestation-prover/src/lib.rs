@@ -10,10 +10,10 @@ use thiserror::Error;
 
 mod input;
 pub use input::{
-    account_from_wallet_output, capture_wallet_snapshot, fetch_sequencer_input,
-    private_account_id_from_mention, prove_live, read_private_snapshot, read_proof,
-    read_prover_input, write_private_snapshot, write_proof, write_prover_input, InputError,
-    PrivateAccountSnapshot, ProofRequest, ProverInputFile,
+    account_from_wallet_output, capture_wallet_snapshot, fetch_sequencer_commitment_root,
+    fetch_sequencer_input, private_account_id_from_mention, prove_live, read_private_snapshot,
+    read_proof, read_prover_input, write_private_snapshot, write_proof, write_prover_input,
+    InputError, PrivateAccountSnapshot, ProofRequest, ProverInputFile,
 };
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]

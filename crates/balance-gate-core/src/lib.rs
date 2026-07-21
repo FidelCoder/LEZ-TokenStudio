@@ -7,7 +7,7 @@ use ed25519_dalek::{Signature, Verifier as _, VerifyingKey};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
-pub const GATE_STATE_VERSION: u16 = 1;
+pub const GATE_STATE_VERSION: u16 = 2;
 pub const ACCESS_BADGE_VERSION: u16 = 1;
 pub const ON_CHAIN_CHALLENGE_VERSION: u16 = 1;
 pub const ON_CHAIN_CHALLENGE_DOMAIN: &[u8] = b"LEZ-TokenStudio/OnChainChallenge/v1";
@@ -78,6 +78,7 @@ pub struct GateState {
     pub token_program_owner: [u32; 8],
     pub token_definition_id: [u8; 32],
     pub threshold: u128,
+    pub commitment_root: [u8; 32],
     pub expires_at_unix_ms: Option<u64>,
     pub challenge_nonce: [u8; 32],
     pub claim_counter: u64,
@@ -85,12 +86,17 @@ pub struct GateState {
 
 impl GateState {
     #[must_use]
-    pub fn new(context: &GateContext, challenge_nonce: Digest32) -> Self {
+    pub fn new(
+        context: &GateContext,
+        commitment_root: Digest32,
+        challenge_nonce: Digest32,
+    ) -> Self {
         Self::from_public_inputs(
             context.context_hash(),
             context.token_program_owner,
             context.token_definition_id,
             context.threshold,
+            commitment_root,
             context.expires_at_unix_ms,
             challenge_nonce,
         )
@@ -102,6 +108,7 @@ impl GateState {
         token_program_owner: [u32; 8],
         token_definition_id: [u8; 32],
         threshold: u128,
+        commitment_root: [u8; 32],
         expires_at_unix_ms: Option<u64>,
         challenge_nonce: [u8; 32],
     ) -> Self {
@@ -111,6 +118,7 @@ impl GateState {
             token_program_owner,
             token_definition_id,
             threshold,
+            commitment_root,
             expires_at_unix_ms,
             challenge_nonce,
             claim_counter: 0,
@@ -120,6 +128,7 @@ impl GateState {
     pub fn validate(&self) -> Result<(), ClaimError> {
         if self.version != GATE_STATE_VERSION
             || self.threshold == 0
+            || self.commitment_root == [0; 32]
             || self.challenge_nonce == [0; 32]
         {
             return Err(ClaimError::InvalidGateState);
@@ -179,6 +188,7 @@ pub enum GateInstruction {
         token_program_owner: [u32; 8],
         token_definition_id: [u8; 32],
         threshold: u128,
+        commitment_root: [u8; 32],
         expires_at_unix_ms: u64,
         challenge_nonce: [u8; 32],
     },
@@ -220,6 +230,7 @@ pub enum ClaimErrorCode {
     WrongContext = 1002,
     WrongToken = 1003,
     WrongThreshold = 1004,
+    UntrustedCommitmentRoot = 1013,
     BadPresenter = 1009,
     CounterOverflow = 2001,
 }
@@ -238,6 +249,8 @@ pub enum ClaimError {
     WrongToken,
     #[error("attestation threshold does not equal the gate threshold")]
     WrongThreshold,
+    #[error("attestation commitment root is not authorized by the gate")]
+    UntrustedCommitmentRoot,
     #[error("presenter signature is invalid")]
     BadPresenter,
     #[error("gate claim counter overflowed")]
@@ -254,6 +267,7 @@ impl ClaimError {
             Self::WrongContext => ClaimErrorCode::WrongContext,
             Self::WrongToken => ClaimErrorCode::WrongToken,
             Self::WrongThreshold => ClaimErrorCode::WrongThreshold,
+            Self::UntrustedCommitmentRoot => ClaimErrorCode::UntrustedCommitmentRoot,
             Self::BadPresenter => ClaimErrorCode::BadPresenter,
             Self::CounterOverflow => ClaimErrorCode::CounterOverflow,
         }
@@ -283,6 +297,9 @@ pub fn evaluate_claim(
     }
     if journal.threshold != state.threshold {
         return Err(ClaimError::WrongThreshold);
+    }
+    if journal.commitment_root != state.commitment_root {
+        return Err(ClaimError::UntrustedCommitmentRoot);
     }
 
     let challenge = state.challenge(program_id, claim_account_id);
@@ -398,7 +415,7 @@ mod tests {
 
     #[test]
     fn valid_claim_rotates_nonce_and_issues_badge() {
-        let state = GateState::new(&context(), [5; 32]);
+        let state = GateState::new(&context(), [8; 32], [5; 32]);
         let signing_key = SigningKey::from_bytes(&[3; 32]);
         let program_id = [9; 8];
         let claim_account_id = [6; 32];
@@ -424,7 +441,7 @@ mod tests {
 
     #[test]
     fn replayed_claim_fails_after_nonce_rotation() {
-        let state = GateState::new(&context(), [5; 32]);
+        let state = GateState::new(&context(), [8; 32], [5; 32]);
         let signing_key = SigningKey::from_bytes(&[3; 32]);
         let program_id = [9; 8];
         let claim_account_id = [6; 32];
@@ -440,7 +457,7 @@ mod tests {
 
     #[test]
     fn signature_cannot_be_forwarded_or_moved_to_another_gate() {
-        let state = GateState::new(&context(), [5; 32]);
+        let state = GateState::new(&context(), [8; 32], [5; 32]);
         let proof_key = SigningKey::from_bytes(&[3; 32]);
         let other_key = SigningKey::from_bytes(&[4; 32]);
         let program_id = [9; 8];
@@ -468,7 +485,7 @@ mod tests {
 
     #[test]
     fn exact_context_token_and_threshold_are_enforced() {
-        let state = GateState::new(&context(), [5; 32]);
+        let state = GateState::new(&context(), [8; 32], [5; 32]);
         let signing_key = SigningKey::from_bytes(&[3; 32]);
         let program_id = [9; 8];
         let claim_account_id = [6; 32];
@@ -493,11 +510,18 @@ mod tests {
             evaluate_claim(&state, program_id, claim_account_id, &wrong_threshold).unwrap_err(),
             ClaimError::WrongThreshold
         );
+
+        let mut wrong_root = signed_claim(&state, &signing_key, program_id, claim_account_id);
+        wrong_root.journal.commitment_root[0] ^= 1;
+        assert_eq!(
+            evaluate_claim(&state, program_id, claim_account_id, &wrong_root).unwrap_err(),
+            ClaimError::UntrustedCommitmentRoot
+        );
     }
 
     #[test]
     fn gate_state_round_trip_is_stable() {
-        let state = GateState::new(&context(), [5; 32]);
+        let state = GateState::new(&context(), [8; 32], [5; 32]);
         assert_eq!(
             decode_gate_state(&encode_gate_state(&state).unwrap()).unwrap(),
             state

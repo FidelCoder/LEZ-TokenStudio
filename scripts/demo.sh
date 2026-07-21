@@ -89,11 +89,18 @@ else
     --presenter-public-key-hex "$PRESENTER_PUBLIC_KEY" \
     --output "$PROOF"
 fi
+if [[ "$RUN_SEQUENCER" == "1" ]]; then
+  COMMITMENT_ROOT_HEX=$("$PROOFGATE_BIN" sequencer-root \
+    --sequencer-url "$SEQUENCER_URL")
+else
+  COMMITMENT_ROOT_HEX=$(jq -er '.journal.commitment_root' "$PROOF")
+fi
 
 echo "[6/11] Issue challenge, present proof, and verify locally"
 "$PROOFGATE_BIN" challenge create \
   --gate "$GATE" \
   --ttl-ms 300000 \
+  --commitment-root-hex "$COMMITMENT_ROOT_HEX" \
   --output "$CHALLENGE"
 "$PROOFGATE_BIN" present \
   --proof "$PROOF" \
@@ -104,6 +111,7 @@ echo "[6/11] Issue challenge, present proof, and verify locally"
 "$PROOFGATE_BIN" verify \
   --gate "$GATE" \
   --envelope "$ENVELOPE" \
+  --challenge "$CHALLENGE" \
   --replay-cache "$REPLAY_CACHE"
 
 echo "[7/11] Confirm persistent replay denial"
@@ -111,6 +119,7 @@ set +e
 REPLAY_OUTPUT=$("$PROOFGATE_BIN" verify \
   --gate "$GATE" \
   --envelope "$ENVELOPE" \
+  --challenge "$CHALLENGE" \
   --replay-cache "$REPLAY_CACHE" 2>&1)
 REPLAY_STATUS=$?
 set -e
@@ -163,6 +172,7 @@ fi
 "$PROOFGATE_BIN" on-chain init \
   --gate "$GATE" \
   --challenge-nonce-hex "$CHALLENGE_NONCE_HEX" \
+  --commitment-root-hex "$COMMITMENT_ROOT_HEX" \
   --output "$STATE"
 if [[ "$RUN_SEQUENCER" == "1" ]]; then
   "$PROOFGATE_BIN" on-chain initialize-submit \

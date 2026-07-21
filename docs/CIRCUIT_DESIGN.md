@@ -2,9 +2,9 @@
 
 ## Statement
 
-The private witness contains a full LEZ private account, its commitment
-membership path, the expected commitment root, a public gate context, a
-presenter public key, and an issuance timestamp.
+The private witness contains a full LEZ private account and its commitment
+membership path. The circuit also receives the claimed commitment root, a
+public gate context, a presenter public key, and an issuance timestamp.
 
 The circuit proves all of the following:
 
@@ -18,6 +18,12 @@ The circuit proves all of the following:
 5. The private fungible token balance is at least the public threshold.
 6. The presenter public key is nonzero and is committed into the journal.
 7. The issuance time is not later than the configured gate expiry.
+
+The circuit proves membership under the root recorded in its journal. Root
+authority is deliberately enforced outside the balance circuit: an off-chain
+VerificationChallenge v2 or on-chain GateState v2 must contain a root obtained
+independently by the verifier. Accepting only the root carried by a holder's
+proof would let that holder construct an unrelated private tree.
 
 ## Public Journal
 

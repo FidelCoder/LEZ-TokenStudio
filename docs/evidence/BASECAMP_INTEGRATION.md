@@ -1,7 +1,8 @@
 # Official Basecamp Integration Evidence
 
-Validated on 2026-07-21 with the locked Nix graph in
-`apps/basecamp-tokenstudio/flake.lock`.
+Historical validation completed on 2026-07-21 for repository revision
+`18ecd373aeaa80bc74103b34b71d22ef73029cb2`. This record does not claim that
+the later trusted-root UI revision has completed the same package run.
 
 ## Pinned Inputs
 
@@ -39,6 +40,21 @@ The rendered PNG is 1024 by 768 pixels. This test also validates the explicit
 CI mode because the default Nix build path exceeds the Unix-domain socket path
 limit used by the Qt view host.
 
+## Current Revision Boundary
+
+The current source adds trusted/authorized commitment-root fields and
+`Read sequencer root` actions to the Prove, Messaging, and On-chain views.
+The source test now asserts those controls. Rust/QML command wiring is covered
+locally, but the current revision still requires:
+
+1. `nix build .#lgx`;
+2. `nix build .#integration-test`; and
+3. installation plus desktop/narrow-window review in the full Basecamp client.
+
+The lock file's `logos-delivery` entry retains the same revision but corrects
+its source NAR hash. Rebuilding the full official dependency graph requires
+network-enabled Nix execution; that execution has not been claimed here.
+
 ## Package
 
 The resulting LGX manifest is version `0.1.0`, type `ui_qml`, and declares:
@@ -54,7 +70,6 @@ The resulting LGX manifest is version `0.1.0`, type `ui_qml`, and declares:
 
 The manifest root hash is
 `0b0fe6215972cc7f301cc1f2169e0593bc09d1d2281ad18c0f2522b44c8416ce`.
-The release artifacts are kept outside the Git repository pending owner review
-and publication. Full-client installation, interactive visual review, and a
-narrow-window screenshot remain release evidence rather than claims made by
-this offscreen integration run.
+These hashes identify only the historical artifacts for the revision stated at
+the top of this file. They are kept outside the Git repository for audit
+comparison and must not be published as the current trusted-root build.

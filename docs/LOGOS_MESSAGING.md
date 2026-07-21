@@ -78,11 +78,16 @@ Create an admission-bound challenge:
 ```bash
 proofgate messaging admission-challenge \
   --gate gate.json \
+  --commitment-root-hex "$COMMITMENT_ROOT" \
   --group-id "$GROUP_ID" \
   --member-address "$MEMBER_ADDRESS" \
   --ttl-ms 300000 \
   --output challenge.json
 ```
+
+`COMMITMENT_ROOT` must be read by the verifier from its own trusted sequencer
+endpoint, for example with `proofgate sequencer-root --sequencer-url
+http://127.0.0.1:3040`. It must not be copied from the holder's proof.
 
 Send it from the verifier and receive it on the holder identity:
 
@@ -131,14 +136,18 @@ proofgate messaging receive-verify \
   --transfer-id "$TRANSFER_ID" \
   --expected-sender "$MEMBER_ADDRESS" \
   --gate gate.json \
+  --challenge challenge.json \
   --replay-cache replay-cache.json \
   --output verified-envelope.json \
   --admit-group-id "$GROUP_ID" \
   --admit-address "$MEMBER_ADDRESS"
 ```
 
-`receive-verify` writes the requested envelope file only after local
-cryptographic verification succeeds. The replay cache is persisted atomically.
+`receive-verify` requires the exact challenge file retained by the verifier;
+it rejects an envelope carrying any other challenge even when the holder has
+validly signed that substitute. It writes the requested envelope file only
+after local cryptographic verification succeeds. The replay cache is persisted
+atomically.
 
 ## Validation
 

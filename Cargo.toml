@@ -55,7 +55,7 @@ fs2 = "0.4"
 rand = "0.8"
 jsonrpsee = { version = "=0.26.0", features = ["http-client"] }
 tokio = { version = "1.50", features = ["macros", "rt-multi-thread"] }
-risc0-zkvm = { version = "=3.0.5", default-features = false, features = ["std", "client"] }
+risc0-zkvm = { version = "=3.0.5", default-features = false, features = ["std", "client", "bonsai"] }
 risc0-build = "=3.0.5"
 serde = { version = "1", features = ["derive"] }
 sha2 = "0.10"

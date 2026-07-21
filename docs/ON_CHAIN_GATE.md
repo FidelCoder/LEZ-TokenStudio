@@ -22,7 +22,8 @@ The `balance_gate` SPEL program then enforces the public policy and possession
 binding:
 
 1. Load and validate the persisted `GateState`.
-2. Match the journal's context, token, threshold, and expiry exactly.
+2. Match the journal's independently authorized commitment root, context,
+   token, threshold, and expiry exactly.
 3. Verify an Ed25519 signature by the presenter key committed in the receipt.
 4. Recursively verify the balance-attestation receipt by its fixed Risc0 image
    ID.
@@ -68,7 +69,8 @@ but must be regenerated before submission to a current sequencer.
 ## Program Accounts
 
 `Initialize` consumes one signer account and writes a program-owned
-`GateState`. An expiry argument of `0` means no gate expiry.
+`GateState`. GateState v2 stores the commitment root chosen by the operator
+from a trusted sequencer. An expiry argument of `0` means no gate expiry.
 
 `Claim` consumes:
 
@@ -88,8 +90,12 @@ proofgate on-chain account-id --key gate-account.json
 
 proofgate on-chain deploy --sequencer-url http://127.0.0.1:3040
 
+COMMITMENT_ROOT=$(proofgate sequencer-root \
+  --sequencer-url http://127.0.0.1:3040)
+
 proofgate on-chain init \
   --gate examples/gates/founders.json \
+  --commitment-root-hex "$COMMITMENT_ROOT" \
   --challenge-nonce-hex <32-byte-hex> \
   --output gate-state.json
 
@@ -151,10 +157,12 @@ and writes its context, presenter key, claim number, and proof issue time as
 JSON. Refetch the gate state as well to observe the incremented counter and
 rotated nonce.
 
-Against an exact local LEZ `v0.2.0` node, the final embedded program deployed
-as `e776135f1f7ebf2dd810c232bd2d3cd75217b44407e12df1c0b1f5fbcf031337`.
-Its initialization transaction was included and its GateState was fetched and
-decoded. Exact transaction and block evidence is recorded in
+Against an exact local LEZ `v0.2.0` node, the root-bound embedded program
+deployed as
+`19936a0b1174095ae7c5978d1ee547741b81c01d6432e167c02a8a84fcec9a0d`.
+Its initialization transaction was included and its GateState v2, including
+the authorized root, was fetched and decoded. Exact transaction evidence is
+recorded in
 [Benchmarks](BENCHMARKS.md).
 
 On-chain proofs have a ten-minute timestamp window. Use an accelerated prover

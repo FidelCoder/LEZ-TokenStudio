@@ -4,6 +4,7 @@ set -euo pipefail
 : "${GATE:?set GATE to a gate config JSON file}"
 : "${PROOF:?set PROOF to a fresh real proof JSON file}"
 : "${PRESENTER_KEY:?set PRESENTER_KEY to the matching presenter key file}"
+: "${COMMITMENT_ROOT_HEX:?set COMMITMENT_ROOT_HEX from an independently trusted sequencer root}"
 : "${HOLDER_CONFIG_DIR:?set HOLDER_CONFIG_DIR to the holder logoscore config directory}"
 : "${VERIFIER_CONFIG_DIR:?set VERIFIER_CONFIG_DIR to the verifier logoscore config directory}"
 : "${HOLDER_CONVERSATION_ID:?set HOLDER_CONVERSATION_ID to the holder direct conversation ID}"
@@ -42,6 +43,7 @@ echo "[1/8] Issue admission-bound verifier challenge"
 "$PROOFGATE_BIN" messaging admission-challenge \
   --gate "$GATE" \
   --group-id "$TARGET_GROUP_ID" \
+  --commitment-root-hex "$COMMITMENT_ROOT_HEX" \
   --member-address "$MEMBER_ADDRESS" \
   --ttl-ms 300000 \
   --output "$CHALLENGE"
@@ -76,6 +78,7 @@ set +e
 FORWARD_OUTPUT=$("$PROOFGATE_BIN" verify \
   --gate "$GATE" \
   --envelope "$ENVELOPE" \
+  --challenge "$CHALLENGE" \
   --replay-cache "$FORWARD_CACHE" \
   --verifier-id "logos-chat:forwarded-copy" 2>&1)
 FORWARD_STATUS=$?
@@ -105,6 +108,7 @@ echo "[6/8] Receive, verify locally, and request bound group admission"
   --expected-sender "$MEMBER_ADDRESS" \
   --timeout-ms 180000 \
   --gate "$GATE" \
+  --challenge "$CHALLENGE" \
   --replay-cache "$REPLAY_CACHE" \
   --output "$RECEIVED" \
   --admit-group-id "$TARGET_GROUP_ID" \
@@ -130,6 +134,7 @@ set +e
 REPLAY_OUTPUT=$("$PROOFGATE_BIN" verify \
   --gate "$GATE" \
   --envelope "$RECEIVED" \
+  --challenge "$CHALLENGE" \
   --replay-cache "$REPLAY_CACHE" 2>&1)
 REPLAY_STATUS=$?
 set -e

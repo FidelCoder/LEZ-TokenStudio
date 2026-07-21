@@ -99,6 +99,7 @@ pub fn gate_initialization_transaction(
         token_program_owner: state.token_program_owner,
         token_definition_id: state.token_definition_id,
         threshold: state.threshold,
+        commitment_root: state.commitment_root,
         expires_at_unix_ms: state.expires_at_unix_ms.unwrap_or(0),
         challenge_nonce: state.challenge_nonce,
     };
@@ -407,7 +408,7 @@ mod tests {
             verifier_id: "lez:founders".to_owned(),
             expires_at_unix_ms: Some(2_000_000),
         };
-        let state = GateState::new(&context, [5; 32]);
+        let state = GateState::new(&context, [9; 32], [5; 32]);
         let gate_account_id = AccountId::new([6; 32]);
         let badge_account_id = AccountId::new([8; 32]);
         let gate = AccountWithMetadata::new(
@@ -459,12 +460,14 @@ mod tests {
 
     #[test]
     fn initialization_requests_protocol_ownership_without_mutating_owner() {
-        let state = GateState::from_public_inputs([2; 32], [3; 8], [4; 32], 100, None, [5; 32]);
+        let state =
+            GateState::from_public_inputs([2; 32], [3; 8], [4; 32], 100, [9; 32], None, [5; 32]);
         let instruction = GateInstruction::Initialize {
             context_hash: state.context_hash,
             token_program_owner: state.token_program_owner,
             token_definition_id: state.token_definition_id,
             threshold: state.threshold,
+            commitment_root: state.commitment_root,
             expires_at_unix_ms: 0,
             challenge_nonce: state.challenge_nonce,
         };
@@ -538,7 +541,8 @@ mod tests {
     fn initialization_transaction_is_signed_by_the_gate_account() {
         let private_key = PrivateKey::try_new([1; 32]).unwrap();
         let gate_account_id = signer_account_id(&private_key);
-        let state = GateState::from_public_inputs([2; 32], [3; 8], [4; 32], 100, None, [5; 32]);
+        let state =
+            GateState::from_public_inputs([2; 32], [3; 8], [4; 32], 100, [9; 32], None, [5; 32]);
 
         let tx =
             gate_initialization_transaction(&state, gate_account_id, 7_u128.into(), &private_key)

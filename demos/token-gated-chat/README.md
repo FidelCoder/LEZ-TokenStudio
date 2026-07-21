@@ -26,12 +26,21 @@ RISC0_DEV_MODE=0 target/release/proofgate prove <arguments>
 The proof must still satisfy ProofGate's 10-minute freshness policy when the
 receiver verifies it.
 
+From the verifier side, query the commitment root from the sequencer endpoint
+you trust. Do not copy this value from the holder's proof:
+
+```bash
+export COMMITMENT_ROOT_HEX=$(target/release/proofgate sequencer-root \
+  --sequencer-url http://127.0.0.1:3040)
+```
+
 ## Required Environment
 
 ```bash
 export GATE=/absolute/path/gate.json
 export PROOF=/absolute/path/proof.json
 export PRESENTER_KEY=/absolute/path/presenter.json
+export COMMITMENT_ROOT_HEX=<64-hex-root-from-verifier-sequencer>
 export HOLDER_CONFIG_DIR=/absolute/path/holder-config
 export VERIFIER_CONFIG_DIR=/absolute/path/verifier-config
 export HOLDER_CONVERSATION_ID=<holder-side-direct-conversation-id>

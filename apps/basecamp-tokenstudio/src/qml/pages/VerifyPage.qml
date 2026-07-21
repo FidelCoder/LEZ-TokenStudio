@@ -9,6 +9,36 @@ Item {
     id: root
     required property var controller
     readonly property bool busy: controller.backend ? controller.backend.busy : false
+    property string trackedOperation: ""
+
+    function runTracked(operation, label, arguments) {
+        root.trackedOperation = operation
+        if (!root.controller.runOperation(label, arguments))
+            root.trackedOperation = ""
+    }
+
+    function hexFromOutput(output) {
+        const matches = String(output).match(/[0-9a-fA-F]{64}/g)
+        return matches && matches.length > 0
+            ? matches[matches.length - 1].toLowerCase()
+            : ""
+    }
+
+    Connections {
+        target: root.controller.backend
+        function onOperationFinished(success, exitCode, output, error) {
+            if (success && root.trackedOperation.length > 0) {
+                const commitmentRoot = root.hexFromOutput(output)
+                if (commitmentRoot.length === 64) {
+                    if (root.trackedOperation === "messaging-root")
+                        messageRoot.text = commitmentRoot
+                    else if (root.trackedOperation === "chain-root")
+                        chainRoot.text = commitmentRoot
+                }
+            }
+            root.trackedOperation = ""
+        }
+    }
 
     ColumnLayout {
         anchors.fill: parent
@@ -48,6 +78,7 @@ Item {
 
                         LabeledField { id: localGate; label: "Gate config"; text: "gate.json" }
                         LabeledField { id: localEnvelope; label: "Presentation envelope"; text: "envelope.json" }
+                        LabeledField { id: localChallenge; label: "Issued challenge"; text: "challenge.json" }
                         LabeledField { id: localReplay; label: "Replay cache"; text: "replay-cache.json" }
                         LabeledField {
                             id: localVerifier
@@ -68,12 +99,14 @@ Item {
                             enabled: !root.busy
                                 && localGate.text.length > 0
                                 && localEnvelope.text.length > 0
+                                && localChallenge.text.length > 0
                                 && localReplay.text.length > 0
                             onClicked: {
                                 var args = [
                                     "verify",
                                     "--gate", localGate.text,
                                     "--envelope", localEnvelope.text,
+                                    "--challenge", localChallenge.text,
                                     "--replay-cache", localReplay.text
                                 ]
                                 if (localVerifier.text.length > 0)
@@ -182,6 +215,17 @@ Item {
                         LabeledField { id: targetGroup; label: "Target group ID" }
                         LabeledField { id: messageGate; label: "Gate config"; text: "gate.json" }
                         LabeledField {
+                            id: messageSequencerUrl
+                            label: "Sequencer URL"
+                            text: "http://127.0.0.1:3040"
+                        }
+                        LabeledField {
+                            id: messageRoot
+                            label: "Trusted commitment root (hex)"
+                            placeholderText: "64 hexadecimal characters"
+                            validator: RegularExpressionValidator { regularExpression: /[0-9a-fA-F]{64}/ }
+                        }
+                        LabeledField {
                             id: admissionChallenge
                             label: "Admission challenge output"
                             text: "admission-challenge.json"
@@ -197,13 +241,23 @@ Item {
                     Flow {
                         Layout.fillWidth: true
                         Button {
+                            text: "Read sequencer root"
+                            enabled: !root.busy && messageSequencerUrl.text.length > 0
+                            onClicked: root.runTracked("messaging-root", "Read trusted commitment root", [
+                                "sequencer-root",
+                                "--sequencer-url", messageSequencerUrl.text
+                            ])
+                        }
+                        Button {
                             text: "Issue admission challenge"
                             enabled: !root.busy
                                 && senderAddress.text.length > 0
                                 && targetGroup.text.length > 0
+                                && messageRoot.text.length === 64
                             onClicked: root.controller.runOperation("Issue admission challenge", [
                                 "messaging", "admission-challenge",
                                 "--gate", messageGate.text,
+                                "--commitment-root-hex", messageRoot.text,
                                 "--group-id", targetGroup.text,
                                 "--member-address", senderAddress.text,
                                 "--output", admissionChallenge.text
@@ -239,6 +293,7 @@ Item {
                                     "--conversation-id", receiveConversation.text,
                                     "--expected-sender", senderAddress.text,
                                     "--gate", messageGate.text,
+                                    "--challenge", admissionChallenge.text,
                                     "--replay-cache", messageReplay.text,
                                     "--output", receivedEnvelope.text,
                                     "--admit-group-id", targetGroup.text,
@@ -286,6 +341,12 @@ Item {
                             placeholderText: "64 hexadecimal characters"
                         }
                         LabeledField { id: chainProof; label: "Balance proof"; text: "proof.json" }
+                        LabeledField {
+                            id: chainRoot
+                            label: "Authorized commitment root (hex)"
+                            placeholderText: "64 hexadecimal characters"
+                            validator: RegularExpressionValidator { regularExpression: /[0-9a-fA-F]{64}/ }
+                        }
                         LabeledField { id: chainKey; label: "Presenter key"; text: "presenter.json" }
                         LabeledField {
                             id: claimAccount
@@ -315,6 +376,14 @@ Item {
                             ])
                         }
                         Button {
+                            text: "Read sequencer root"
+                            enabled: !root.busy && sequencerUrl.text.length > 0
+                            onClicked: root.runTracked("chain-root", "Read authorized commitment root", [
+                                "sequencer-root",
+                                "--sequencer-url", sequencerUrl.text
+                            ])
+                        }
+                        Button {
                             text: "Deploy program"
                             enabled: !root.busy && sequencerUrl.text.length > 0
                             onClicked: root.controller.runOperation("Deploy balance gate", [
@@ -326,10 +395,12 @@ Item {
                             text: "Initialize state"
                             enabled: !root.busy
                                 && chainNonce.text.length === 64
+                                && chainRoot.text.length === 64
                                 && chainGate.text.length > 0
                             onClicked: root.controller.runOperation("Initialize on-chain gate", [
                                 "on-chain", "init",
                                 "--gate", chainGate.text,
+                                "--commitment-root-hex", chainRoot.text,
                                 "--challenge-nonce-hex", chainNonce.text,
                                 "--output", chainState.text
                             ])

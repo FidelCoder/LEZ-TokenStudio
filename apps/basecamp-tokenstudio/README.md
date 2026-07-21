@@ -6,12 +6,13 @@ Basecamp:
 - create, select, and mint LEZ tokens;
 - configure token-specific threshold gates;
 - generate presenter keys and real Risc0 balance proofs;
-- issue challenges and create signed presentations;
+- read a verifier-owned sequencer root, issue root-bound challenges, and create
+  signed presentations;
 - verify presentations locally with persistent replay protection;
 - send and receive chunked presentations through `chat_module`;
 - admit a sender-bound holder to a GroupV2 conversation; and
-- deploy, initialize, simulate, compose, sign, and submit the SPEL on-chain
-  access-badge flow.
+- read an operator-owned sequencer root, then deploy, initialize, simulate,
+  compose, sign, and submit the SPEL on-chain access-badge flow.
 
 ## Architecture
 
@@ -68,13 +69,15 @@ existing direct/group conversation IDs. See `docs/LOGOS_MESSAGING.md` and
 
 ## Local Validation Boundary
 
-The Rust command contracts behind every control are covered by workspace tests
-and strict Clippy. The module has also been packaged successfully with
-`nix build .#lgx` using the locked official module builder, Qt, `lez_core`,
-`delivery_module`, and `chat_module` graph. The integration test uses the
-official Logos Qt test framework to load the backend, navigate every workflow,
-assert the controls, and preserve a non-empty `proofgate-desktop.png`
-screenshot in the integration output. The locked run completed with four
-passing tests and zero failures; see `docs/evidence/BASECAMP_INTEGRATION.md`
-for revisions and artifact hashes. Installation and visual review in the full
-Basecamp client remain separate release evidence.
+The Rust command contracts and current QML source assertions behind every
+control are covered by workspace tests and strict Clippy. The earlier UI
+revision was packaged successfully with `nix build .#lgx` using the locked
+official module builder, Qt, `lez_core`, `delivery_module`, and
+`chat_module` graph. Its official Logos Qt integration run completed with
+four passing tests and a non-empty `proofgate-desktop.png`.
+
+The current revision adds required trusted-root inputs and sequencer-root
+actions to Prove, Messaging, and On-chain views. A fresh Nix package/integration
+run and installation in the full Basecamp client remain release evidence; the
+historical artifact is not represented as the current installable build. See
+`docs/evidence/BASECAMP_INTEGRATION.md` for the exact boundary.

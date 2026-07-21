@@ -39,6 +39,9 @@ test("ProofGate: navigates every primary workflow", async (app) => {
     "Presenter",
     "Balance proof",
     "Presentation",
+    "Issued challenge",
+    "Trusted commitment root (hex)",
+    "Read sequencer root",
     "witness.json",
     "300000",
     "Generate proof",
@@ -50,6 +53,8 @@ test("ProofGate: navigates every primary workflow", async (app) => {
   await app.click("Messaging", { exact: true });
   await app.expectTexts([
     "Encrypted transport",
+    "Trusted commitment root (hex)",
+    "Read sequencer root",
     "Verify and admit",
     "Send proof",
     "Verify and admit",
@@ -58,6 +63,8 @@ test("ProofGate: navigates every primary workflow", async (app) => {
   await app.click("On-chain", { exact: true });
   await app.expectTexts([
     "LEZ access badge",
+    "Authorized commitment root (hex)",
+    "Read sequencer root",
     "Deploy program",
     "Submit claim",
     "Fetch access badge",

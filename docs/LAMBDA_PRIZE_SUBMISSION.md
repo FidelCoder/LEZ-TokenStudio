@@ -85,13 +85,13 @@ Work here:
 
 ```bash
 cd "/home/core/Desktop/LOGOS PRIVACY/LEZ-TokenStudio"
-git checkout -b solution/lp-0005-proofgate
+git checkout main
 ```
 
 Build, test, document, and push this repo:
 
 ```bash
-git push -u origin solution/lp-0005-proofgate
+git push origin main
 ```
 
 ### Lambda Prize Fork

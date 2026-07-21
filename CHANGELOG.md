@@ -11,6 +11,9 @@
   RPC.
 - Added challenge-bound local verification, deterministic denials, persistent
   replay protection, and restricted presenter key files.
+- Added independent sequencer-root acquisition, VerificationChallenge v2,
+  exact retained-challenge matching, and deterministic rejection of
+  prover-selected commitment trees.
 - Added the SPEL `balance_gate` program, generated IDL, access badges, nonce
   rotation, timestamp windows, and recursive official LEZ PPE composition.
 - Added restricted LEZ signer generation, canonical transaction packaging,
@@ -28,3 +31,9 @@
 - Corrected SPEL initialization and badge creation ownership so LEZ applies the
   authorized program owner after guest execution.
 - Added authoritative access-badge fetching and decoding by sequencer RPC.
+- Added GateState v2 with an operator-authorized commitment root and regenerated
+  the SPEL program/IDL.
+- Added real Bonsai prover support while retaining the strict
+  `RISC0_DEV_MODE=0` guard.
+- Added local CI plus a clean standalone LEZ v0.2.0 integration job covering
+  live membership, deployment, inclusion, and root-bound initialization.

@@ -307,11 +307,12 @@ pub async fn submit_on_chain_claim(
 
 pub fn initialize_on_chain_state(
     gate_path: &Path,
+    commitment_root: Digest32,
     challenge_nonce: Digest32,
     output: &Path,
 ) -> Result<GateState, String> {
     let gate = read_gate_config(gate_path).map_err(|error| error.to_string())?;
-    let state = GateState::new(&gate.context, challenge_nonce);
+    let state = GateState::new(&gate.context, commitment_root, challenge_nonce);
     state.validate().map_err(|error| error.to_string())?;
     write_json(output, &state)?;
     Ok(state)
@@ -336,6 +337,9 @@ pub fn create_on_chain_claim(
     let proof = read_proof(proof_path).map_err(input_message)?;
     let state: GateState = read_json(state_path)?;
     state.validate().map_err(|error| error.to_string())?;
+    if proof.journal.commitment_root != state.commitment_root {
+        return Err("proof commitment root is not authorized by the on-chain gate".to_owned());
+    }
     let key = read_presenter_key(presenter_key_path)?;
     let signing_key = key.signing_key()?;
     if signing_key.verifying_key().to_bytes() != proof.journal.presenter_public_key {
@@ -424,6 +428,7 @@ pub fn presenter_public_key(path: &Path) -> Result<Digest32, String> {
 
 pub fn issue_challenge(
     gate_path: &Path,
+    expected_commitment_root: Digest32,
     verifier_id: Option<&str>,
     now_unix_ms: u64,
     ttl_ms: u64,
@@ -431,14 +436,21 @@ pub fn issue_challenge(
 ) -> Result<VerificationChallenge, String> {
     let gate = read_gate_config(gate_path).map_err(|error| error.to_string())?;
     let verifier_id = verifier_id.unwrap_or(&gate.context.verifier_id);
-    let challenge =
-        create_challenge(&gate, verifier_id, now_unix_ms, ttl_ms).map_err(verification_message)?;
+    let challenge = create_challenge(
+        &gate,
+        expected_commitment_root,
+        verifier_id,
+        now_unix_ms,
+        ttl_ms,
+    )
+    .map_err(verification_message)?;
     write_json(output, &challenge)?;
     Ok(challenge)
 }
 
 pub fn issue_admission_challenge(
     gate_path: &Path,
+    expected_commitment_root: Digest32,
     group_id: &str,
     member_address: &str,
     now_unix_ms: u64,
@@ -446,8 +458,14 @@ pub fn issue_admission_challenge(
     output: &Path,
 ) -> Result<VerificationChallenge, String> {
     let gate = read_gate_config(gate_path).map_err(|error| error.to_string())?;
-    let challenge = create_challenge(&gate, &gate.context.verifier_id, now_unix_ms, ttl_ms)
-        .map_err(verification_message)?;
+    let challenge = create_challenge(
+        &gate,
+        expected_commitment_root,
+        &gate.context.verifier_id,
+        now_unix_ms,
+        ttl_ms,
+    )
+    .map_err(verification_message)?;
     let challenge = bind_admission_challenge(challenge, group_id, member_address);
     write_json(output, &challenge)?;
     Ok(challenge)
@@ -492,14 +510,17 @@ pub fn write_presentation(path: &Path, envelope: &AttestationEnvelope) -> Result
 pub fn verify_presentation(
     gate_path: &Path,
     envelope_path: &Path,
+    expected_challenge_path: &Path,
     replay_cache_path: &Path,
     expected_verifier_id: Option<&str>,
     now_unix_ms: u64,
 ) -> Result<VerifyOutcome, String> {
     let envelope: AttestationEnvelope = read_json(envelope_path)?;
+    let expected_challenge: VerificationChallenge = read_json(expected_challenge_path)?;
     verify_received_presentation(
         gate_path,
         &envelope,
+        &expected_challenge,
         replay_cache_path,
         expected_verifier_id,
         now_unix_ms,
@@ -509,6 +530,7 @@ pub fn verify_presentation(
 pub fn verify_received_presentation(
     gate_path: &Path,
     envelope: &AttestationEnvelope,
+    expected_challenge: &VerificationChallenge,
     replay_cache_path: &Path,
     expected_verifier_id: Option<&str>,
     now_unix_ms: u64,
@@ -520,6 +542,7 @@ pub fn verify_received_presentation(
     let verified = verify(
         VerifyRequest {
             envelope,
+            expected_challenge,
             expected_gate: &gate,
             expected_verifier_id: verifier_id,
             now_unix_ms,

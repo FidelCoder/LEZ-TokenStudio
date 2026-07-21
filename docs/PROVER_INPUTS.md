@@ -57,6 +57,28 @@ not return the root separately, so ProofGate derives it from the returned path
 and commitment using the same LEZ `MembershipProof::compute_root` semantics.
 An ignored integration test exercises this fallback against a real node.
 
+## Independent Verifier Root
+
+Proof input acquisition and verifier root selection are separate trust
+operations. Before issuing an off-chain challenge or initializing an on-chain
+gate, the verifier/operator reads a root from its own configured sequencer:
+
+```bash
+COMMITMENT_ROOT=$(cargo run -p proofgate -- sequencer-root \
+  --sequencer-url http://127.0.0.1:3040)
+
+cargo run -p proofgate -- challenge create \
+  --gate gate.json \
+  --commitment-root-hex "$COMMITMENT_ROOT" \
+  --output challenge.json
+```
+
+Do not copy the trusted root from `proof.json` or accept it from the holder.
+With `RUN_SEQUENCER=1`, `scripts/demo.sh` queries the configured sequencer
+independently. Only its deterministic fixture mode derives the root from the
+local proof to keep a self-contained demo reproducible; that shortcut is not a
+production trust model.
+
 ## Sensitive Files
 
 Wallet snapshots and prover input fixtures contain account IDs, exact balances,

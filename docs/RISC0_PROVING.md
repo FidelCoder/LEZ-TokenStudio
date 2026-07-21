@@ -48,6 +48,23 @@ The ignored test generates a succinct receipt, verifies it against the image ID,
 serializes it, decodes it, verifies it again, and compares the decoded journal
 with the host-evaluated statement.
 
+## Real Prover Acceleration
+
+ProofGate enables Risc0's Bonsai prover feature. When both variables below are
+present, Risc0's default prover selects Bonsai instead of the local CPU prover:
+
+```bash
+export BONSAI_API_URL=<bonsai-api-url>
+export BONSAI_API_KEY=<bonsai-api-key>
+RISC0_DEV_MODE=0 proofgate prove <arguments>
+```
+
+Bonsai produces a cryptographic receipt; it is not a mock or development-mode
+path. ProofGate still rejects truthy `RISC0_DEV_MODE` values and verifies the
+returned receipt against the fixed method image before writing it. Credentials
+are external secrets and must not be committed. Without them, ProofGate uses
+the real local prover.
+
 ## Local Benchmark
 
 First verified run on 2026-07-19:

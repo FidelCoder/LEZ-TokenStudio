@@ -2,7 +2,7 @@
 
 ## Environment
 
-- Date: 2026-07-19 to 2026-07-20
+- Date: 2026-07-19 to 2026-07-21
 - OS: Ubuntu 24.04.4 LTS, x86_64
 - CPU: Intel Core i5-7300U, 2 cores / 4 threads, up to 3.5 GHz
 - Memory: 15 GiB RAM, 4 GiB swap
@@ -50,18 +50,21 @@ sequencer built from commit `a58fbce2` and listening on
 | --- | --- |
 | Health RPC | successful |
 | Legacy membership RPC | `getProofForCommitment` fallback passed |
-| Final gate program ID | `e776135f1f7ebf2dd810c232bd2d3cd75217b44407e12df1c0b1f5fbcf031337` |
-| Deployment transaction | `61392cd68030c6d4b183dd9628885a683aa80cbaff6a2d72c5af1f80a344c276` |
-| Deployment inclusion | block 79 |
-| Gate account | `c4dc2f3eea999dbeccf2f4c04c881874b2cc4d5cae231c8caca10034830cf4de` |
-| Initialization transaction | `0bd827648a9a5095cf8fd453c234c872e591313f0dbc629a1672145a50bc9d39` |
-| Initialization inclusion | block 84 |
+| Independently queried root | `d4e0961e5e2774178dad46069bfb7cd610b883417f7ce07475c9c61d3b45575f` |
+| Root-bound gate program ID | `19936a0b1174095ae7c5978d1ee547741b81c01d6432e167c02a8a84fcec9a0d` |
+| Deployment transaction | `d09c590a68e3754908d4bdb87e8dfc2152cf15636ae011d3d23a65094e293a66` |
+| Gate account | `514a3e3cd0f1ea199afddcf48e1bf90372439cccc4090c2e95d815f03f94cd79` |
+| Initialization transaction | `8f73d4a79715a1069ea2c3e9ee66ff94030cf2d9bd57ee27856fd4f66aa8bc96` |
+| Transaction indexing | both queryable by observed height 21 |
+| Decoded GateState version/root | version 2 / exact queried root |
 | Decoded gate context | `c8136d53893ad946bec8cbe7a4bdb4734618d7290fa2ef685f18bacc06f55c95` |
 | Decoded claim counter | `0` |
 
-These IDs belong to the corrected final ELF. Deployment, public
-initialization, `getAccount`, and state decoding are live-node evidence.
-Private claim inclusion and compute/cost measurements are not claimed.
+These IDs belong to the root-bound ELF. Deployment, public initialization,
+`getAccount`, and GateState v2 decoding are live-node evidence. The
+reproducible `scripts/ci-standalone-lez.sh` run independently completed the
+same lifecycle from a clean temporary node. Private claim inclusion and
+compute/cost measurements are not claimed.
 See the [full local sequencer record](evidence/LOCAL_LEZ_V0_2_0.md) for the
 compatibility and ownership findings.
 
@@ -84,8 +87,9 @@ The real 299,730-byte presentation required ten default chunks plus one
 manifest. It was reconstructed and verified locally before the holder appeared
 in the verifier-owned GroupV2 roster. Forwarding and replay were rejected with
 codes 1008 and 1010. The live run did not instrument Waku propagation time, so
-no network latency measurement is claimed. See the [redacted runtime
-record](evidence/LIVE_LOGOS_MESSAGING.md).
+no network latency measurement is claimed. This measurement predates
+VerificationChallenge v2; a root-bound network rerun is not claimed. See the
+[redacted runtime record](evidence/LIVE_LOGOS_MESSAGING.md).
 
 ## Recursive LEZ Composition
 
@@ -114,4 +118,8 @@ RISC0_DEV_MODE=0 target/release/proofgate on-chain compose \
   --gate-account-id-hex <64-hex> \
   --badge-account-id-hex <64-hex> \
   --output-lez-proof lez-proof.bin
+
+scripts/ci-standalone-lez.sh \
+  /path/to/lez-v0.2.0/sequencer_service \
+  /path/to/lez-v0.2.0/sequencer_config.json
 ```
