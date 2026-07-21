@@ -1,6 +1,8 @@
 /target/
 /result
 /result-*
+/apps/basecamp-tokenstudio/result
+/apps/basecamp-tokenstudio/result-*
 /.direnv/
 /.env
 /.DS_Store

@@ -23,6 +23,7 @@ REPLAY_CACHE="$WORK_DIR/replay-cache.json"
 STATE="$WORK_DIR/gate-state.json"
 CLAIM="$WORK_DIR/claim.json"
 LEZ_PROOF="$WORK_DIR/lez-proof.bin"
+BADGE="$WORK_DIR/access-badge.json"
 GATE_ACCOUNT_KEY="$WORK_DIR/gate-account.json"
 BADGE_ACCOUNT_KEY="$WORK_DIR/badge-account.json"
 
@@ -196,6 +197,32 @@ if [[ "$RUN_SEQUENCER" == "1" ]]; then
     --gate-account-id-hex "$GATE_ACCOUNT_HEX" \
     --badge-key "$BADGE_ACCOUNT_KEY" \
     --output-lez-proof "$LEZ_PROOF"
+  sleep "$SEQUENCER_SETTLE_SECONDS"
+  set +e
+  ON_CHAIN_REPLAY_OUTPUT=$(RISC0_DEV_MODE=0 "$PROOFGATE_BIN" on-chain claim-submit \
+    --sequencer-url "$SEQUENCER_URL" \
+    --proof "$PROOF" \
+    --state "$STATE" \
+    --claim "$CLAIM" \
+    --gate-account-id-hex "$GATE_ACCOUNT_HEX" \
+    --badge-key "$BADGE_ACCOUNT_KEY" \
+    --output-lez-proof "$WORK_DIR/replayed-lez-proof.bin" 2>&1)
+  ON_CHAIN_REPLAY_STATUS=$?
+  set -e
+  if [[ $ON_CHAIN_REPLAY_STATUS -eq 0 ]] \
+    || ! grep -Fq 'gate state changed after the challenge was issued' <<<"$ON_CHAIN_REPLAY_OUTPUT"; then
+    echo "expected stale on-chain claim rejection, got: $ON_CHAIN_REPLAY_OUTPUT" >&2
+    exit 1
+  fi
+  echo "Stale on-chain claim denied"
+  "$PROOFGATE_BIN" on-chain fetch-state \
+    --sequencer-url "$SEQUENCER_URL" \
+    --gate-account-id-hex "$GATE_ACCOUNT_HEX" \
+    --output "$STATE"
+  "$PROOFGATE_BIN" on-chain fetch-badge \
+    --sequencer-url "$SEQUENCER_URL" \
+    --badge-account-id-hex "$BADGE_ACCOUNT_HEX" \
+    --output "$BADGE"
 elif [[ "$RUN_COMPOSITION" == "1" ]]; then
   RISC0_DEV_MODE=0 "$PROOFGATE_BIN" on-chain compose \
     --proof "$PROOF" \

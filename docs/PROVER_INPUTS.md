@@ -37,7 +37,9 @@ cargo run -p proofgate -- wallet snapshot \
   --output holder.snapshot.json
 ```
 
-Request `getProofsAndRoot` from a sequencer and prove the live account:
+Request a commitment membership proof from a sequencer and prove the live
+account. ProofGate first uses the current `getProofsAndRoot` RPC and
+automatically falls back to LEZ `v0.2.0`'s `getProofForCommitment` RPC:
 
 ```bash
 RISC0_DEV_MODE=0 cargo run -p proofgate -- prove \
@@ -50,7 +52,10 @@ RISC0_DEV_MODE=0 cargo run -p proofgate -- prove \
 
 Before proving, the host recomputes the LEZ commitment and rejects a sequencer
 response whose membership path does not produce the returned root. The same
-membership calculation runs again inside the Risc0 guest.
+membership calculation runs again inside the Risc0 guest. The legacy RPC does
+not return the root separately, so ProofGate derives it from the returned path
+and commitment using the same LEZ `MembershipProof::compute_root` semantics.
+An ignored integration test exercises this fallback against a real node.
 
 ## Sensitive Files
 

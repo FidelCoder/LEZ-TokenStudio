@@ -394,7 +394,7 @@ mod tests {
     use ed25519_dalek::{Signer as _, SigningKey};
     use lee_core::{
         account::{Account, AccountId, AccountWithMetadata},
-        program::DEFAULT_PROGRAM_ID,
+        program::{Claim, DEFAULT_PROGRAM_ID},
     };
 
     fn fixture() -> (Vec<AccountWithMetadata>, ClaimAccess) {
@@ -458,10 +458,63 @@ mod tests {
     }
 
     #[test]
+    fn initialization_requests_protocol_ownership_without_mutating_owner() {
+        let state = GateState::from_public_inputs([2; 32], [3; 8], [4; 32], 100, None, [5; 32]);
+        let instruction = GateInstruction::Initialize {
+            context_hash: state.context_hash,
+            token_program_owner: state.token_program_owner,
+            token_definition_id: state.token_definition_id,
+            threshold: state.threshold,
+            expires_at_unix_ms: 0,
+            challenge_nonce: state.challenge_nonce,
+        };
+        let instruction_data = to_vec(&instruction).unwrap();
+        let pre_states = vec![AccountWithMetadata::new(
+            Account::default(),
+            true,
+            AccountId::new([6; 32]),
+        )];
+        let mut env_builder = ExecutorEnv::builder();
+        write_program_inputs(
+            BALANCE_GATE_ID,
+            None,
+            &pre_states,
+            &instruction_data,
+            &mut env_builder,
+        )
+        .unwrap();
+        let session = default_executor()
+            .execute(env_builder.build().unwrap(), BALANCE_GATE_ELF)
+            .unwrap();
+        let output: ProgramOutput = session.journal.decode().unwrap();
+
+        assert_eq!(
+            output.post_states[0].account().program_owner,
+            DEFAULT_PROGRAM_ID
+        );
+        assert_eq!(
+            output.post_states[0].required_claim(),
+            Some(Claim::Authorized)
+        );
+        assert_eq!(
+            decode_gate_state(output.post_states[0].account().data.as_ref()).unwrap(),
+            state
+        );
+    }
+
+    #[test]
     fn conditional_executor_runs_real_lez_gate_logic() {
         let (pre_states, claim) = fixture();
         let output = execute_gate_claim_conditionally(pre_states, claim).unwrap();
 
+        assert_eq!(
+            output.post_states[0].account().program_owner,
+            BALANCE_GATE_ID
+        );
+        assert_eq!(
+            output.post_states[1].account().program_owner,
+            DEFAULT_PROGRAM_ID
+        );
         let state = decode_gate_state(output.post_states[0].account().data.as_ref()).unwrap();
         let badge = decode_access_badge(output.post_states[1].account().data.as_ref()).unwrap();
         assert_eq!(state.claim_counter, 1);

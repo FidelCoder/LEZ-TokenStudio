@@ -40,6 +40,31 @@ not a representative steady-state benchmark.
 Conditional execution validates guest logic and account transitions but is not
 a cryptographic receipt benchmark.
 
+## Standalone LEZ v0.2.0
+
+The final gate ELF was tested against an exact LEZ `v0.2.0` standalone
+sequencer built from commit `a58fbce2` and listening on
+`http://127.0.0.1:3040`.
+
+| Evidence | Result |
+| --- | --- |
+| Health RPC | successful |
+| Legacy membership RPC | `getProofForCommitment` fallback passed |
+| Final gate program ID | `e776135f1f7ebf2dd810c232bd2d3cd75217b44407e12df1c0b1f5fbcf031337` |
+| Deployment transaction | `61392cd68030c6d4b183dd9628885a683aa80cbaff6a2d72c5af1f80a344c276` |
+| Deployment inclusion | block 79 |
+| Gate account | `c4dc2f3eea999dbeccf2f4c04c881874b2cc4d5cae231c8caca10034830cf4de` |
+| Initialization transaction | `0bd827648a9a5095cf8fd453c234c872e591313f0dbc629a1672145a50bc9d39` |
+| Initialization inclusion | block 84 |
+| Decoded gate context | `c8136d53893ad946bec8cbe7a4bdb4734618d7290fa2ef685f18bacc06f55c95` |
+| Decoded claim counter | `0` |
+
+These IDs belong to the corrected final ELF. Deployment, public
+initialization, `getAccount`, and state decoding are live-node evidence.
+Private claim inclusion and compute/cost measurements are not claimed.
+See the [full local sequencer record](evidence/LOCAL_LEZ_V0_2_0.md) for the
+compatibility and ownership findings.
+
 ## Messaging
 
 | Measurement | Result |
@@ -49,10 +74,18 @@ a cryptographic receipt benchmark.
 | Maximum decoded chunk size | 49,152 bytes |
 | Maximum transfer | 4 MiB / 128 chunks |
 | Receipt-sized protocol tests | 7 passed |
+| Official encrypted Chat doctest | 20 passed / 0 failed / 0 skipped |
+| Live real receipt | 223,970 bytes |
+| Live signed presentation | 299,730 bytes |
+| Live transfer | 10 chunks + 1 manifest |
+| Live admission result | GroupV2 member observed |
 
-The real 299,730-byte envelope requires ten default chunks plus one manifest.
-Live Waku propagation time depends on the selected Logos fleet and remains an
-external integration measurement.
+The real 299,730-byte presentation required ten default chunks plus one
+manifest. It was reconstructed and verified locally before the holder appeared
+in the verifier-owned GroupV2 roster. Forwarding and replay were rejected with
+codes 1008 and 1010. The live run did not instrument Waku propagation time, so
+no network latency measurement is claimed. See the [redacted runtime
+record](evidence/LIVE_LOGOS_MESSAGING.md).
 
 ## Recursive LEZ Composition
 
@@ -63,8 +96,10 @@ gate proving phase and produced no artifact. A second instrumented run remained
 in gate proving for approximately 90 minutes and exited without producing an
 artifact or preserving final stderr after its detached session expired.
 
-No sequencer compute-unit or transaction cost is claimed yet. The final value
-must come from an accepted local/testnet transaction, not host execution time.
+No sequencer compute-unit or transaction cost is claimed. The standalone node
+accepted deployment and initialization, but final cost evidence must include a
+private claim and come from the network's supported metric rather than host
+execution time.
 
 ## Reproduction
 

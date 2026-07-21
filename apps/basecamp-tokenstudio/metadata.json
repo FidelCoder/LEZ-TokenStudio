@@ -9,7 +9,7 @@
   "author": "FidelCoder",
   "main": "tokenstudio_proofgate_ui_plugin",
   "view": "qml/ProofGateView.qml",
-  "dependencies": ["logos_execution_zone", "chat_module"],
+  "dependencies": ["lez_core", "delivery_module", "chat_module"],
   "codegen": {
     "rep": "src/proofgate_ui.rep"
   },

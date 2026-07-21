@@ -88,7 +88,8 @@ Client-side library and CLI:
 
 1. Read private account state from the wallet/local account store or wallet FFI.
 2. Compute the account commitment.
-3. Call sequencer RPC `getProofsAndRoot` with the commitment.
+3. Call sequencer RPC `getProofsAndRoot`, falling back to the pinned
+   `v0.2.0` `getProofForCommitment` method.
 4. Build the Risc0 witness.
 5. Generate the receipt with `RISC0_DEV_MODE=0`.
 6. Emit an `AttestationEnvelope`.
@@ -182,7 +183,7 @@ The UI should support three tabs:
 
 ### M3: Prover and Off-Chain Verifier
 
-- Client computes commitment and calls `getProofsAndRoot`.
+- Client computes commitment and obtains the sequencer membership proof.
 - `RISC0_DEV_MODE=0` proof generation works locally.
 - Off-chain verifier checks receipt, context, and presenter signature.
 - Forwarded-proof rejection demo.

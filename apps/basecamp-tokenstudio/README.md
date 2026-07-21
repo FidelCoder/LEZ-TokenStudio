@@ -17,10 +17,11 @@ Basecamp:
 
 The module follows the current universal Logos `ui_qml` pattern:
 
-- `metadata.json` declares `logos_execution_zone` and `chat_module` runtime
-  dependencies;
+- `metadata.json` declares `lez_core`, `delivery_module`, and `chat_module`
+  runtime dependencies;
 - `src/proofgate_ui.rep` is the Qt Remote Objects contract;
-- `ProofGateUiBackend` asynchronously launches the audited `proofgate` binary;
+- `TokenstudioProofgateUiBackend` asynchronously launches the audited
+  `proofgate` binary;
 - `src/qml/ProofGateView.qml` is the Basecamp view.
 
 The backend uses `QProcess` argument lists and never invokes a shell. It forces
@@ -68,5 +69,12 @@ existing direct/group conversation IDs. See `docs/LOGOS_MESSAGING.md` and
 ## Local Validation Boundary
 
 The Rust command contracts behind every control are covered by workspace tests
-and strict Clippy. Packaging this module requires Nix, CMake, Qt, and the Logos
-module builder; those tools are not part of the Rust workspace itself.
+and strict Clippy. The module has also been packaged successfully with
+`nix build .#lgx` using the locked official module builder, Qt, `lez_core`,
+`delivery_module`, and `chat_module` graph. The integration test uses the
+official Logos Qt test framework to load the backend, navigate every workflow,
+assert the controls, and preserve a non-empty `proofgate-desktop.png`
+screenshot in the integration output. The locked run completed with four
+passing tests and zero failures; see `docs/evidence/BASECAMP_INTEGRATION.md`
+for revisions and artifact hashes. Installation and visual review in the full
+Basecamp client remain separate release evidence.

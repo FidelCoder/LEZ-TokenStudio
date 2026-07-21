@@ -1,4 +1,4 @@
-#include "proofgate_ui_backend.h"
+#include "tokenstudio_proofgate_ui_backend.h"
 
 #include <QDir>
 #include <QFileInfo>
@@ -25,7 +25,7 @@ QString normalizedPath(const QString& value) {
 
 } // namespace
 
-ProofGateUiBackend::ProofGateUiBackend()
+TokenstudioProofgateUiBackend::TokenstudioProofgateUiBackend()
     : ProofGateUiSimpleSource(), m_process(new QProcess(this)) {
     QSettings settings(kSettingsOrg, kSettingsApp);
     QString binary = settings.value(kBinaryKey).toString();
@@ -52,17 +52,17 @@ ProofGateUiBackend::ProofGateUiBackend()
     });
 }
 
-ProofGateUiBackend::~ProofGateUiBackend() {
+TokenstudioProofgateUiBackend::~TokenstudioProofgateUiBackend() {
     if (m_process->state() != QProcess::NotRunning) {
         m_process->kill();
         m_process->waitForFinished(1'000);
     }
 }
 
-void ProofGateUiBackend::onContextReady() {
+void TokenstudioProofgateUiBackend::onContextReady() {
 }
 
-bool ProofGateUiBackend::configureProofgateBinary(QString path) {
+bool TokenstudioProofgateUiBackend::configureProofgateBinary(QString path) {
     if (busy()) {
         return false;
     }
@@ -85,7 +85,7 @@ bool ProofGateUiBackend::configureProofgateBinary(QString path) {
     return true;
 }
 
-bool ProofGateUiBackend::start(QString operation, QStringList arguments) {
+bool TokenstudioProofgateUiBackend::start(QString operation, QStringList arguments) {
     if (busy() || arguments.isEmpty()) {
         return false;
     }
@@ -122,7 +122,7 @@ bool ProofGateUiBackend::start(QString operation, QStringList arguments) {
     return true;
 }
 
-bool ProofGateUiBackend::cancel() {
+bool TokenstudioProofgateUiBackend::cancel() {
     if (!busy() || m_process->state() == QProcess::NotRunning) {
         return false;
     }
@@ -135,14 +135,14 @@ bool ProofGateUiBackend::cancel() {
     return true;
 }
 
-void ProofGateUiBackend::drainOutput() {
+void TokenstudioProofgateUiBackend::drainOutput() {
     m_stdout.append(m_process->readAllStandardOutput());
     m_stderr.append(m_process->readAllStandardError());
     ProofGateUiSimpleSource::setLastOutput(QString::fromUtf8(m_stdout));
     ProofGateUiSimpleSource::setLastError(QString::fromUtf8(m_stderr));
 }
 
-void ProofGateUiBackend::finish(int exitCode, QProcess::ExitStatus exitStatus) {
+void TokenstudioProofgateUiBackend::finish(int exitCode, QProcess::ExitStatus exitStatus) {
     drainOutput();
     const bool success = exitStatus == QProcess::NormalExit && exitCode == 0;
     const QString output = QString::fromUtf8(m_stdout).trimmed();
@@ -160,7 +160,7 @@ void ProofGateUiBackend::finish(int exitCode, QProcess::ExitStatus exitStatus) {
     emit operationFinished(success, exitCode, output, error);
 }
 
-void ProofGateUiBackend::failToStart(const QString& message) {
+void TokenstudioProofgateUiBackend::failToStart(const QString& message) {
     if (!busy()) {
         return;
     }

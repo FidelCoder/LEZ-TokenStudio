@@ -25,7 +25,7 @@ use tokenstudio_config::{
 };
 use workflow::{
     balance_gate_program_id, compose_on_chain_claim, create_on_chain_claim, create_presentation,
-    current_on_chain_challenge, deploy_balance_gate, fetch_on_chain_state,
+    current_on_chain_challenge, deploy_balance_gate, fetch_on_chain_badge, fetch_on_chain_state,
     generate_lez_account_key, generate_presenter_key, initialize_on_chain_state,
     issue_admission_challenge, issue_challenge, lez_account_id, presenter_public_key,
     read_presentation, read_verification_challenge, simulate_on_chain_claim, submit_on_chain_claim,
@@ -226,6 +226,7 @@ enum OnChainCommand {
     Deploy(OnChainDeployArgs),
     Init(OnChainInitArgs),
     FetchState(OnChainFetchStateArgs),
+    FetchBadge(OnChainFetchBadgeArgs),
     InitializeSubmit(OnChainInitializeSubmitArgs),
     Challenge(OnChainChallengeArgs),
     Present(OnChainPresentArgs),
@@ -268,6 +269,16 @@ struct OnChainFetchStateArgs {
     sequencer_url: String,
     #[arg(long)]
     gate_account_id_hex: String,
+    #[arg(long)]
+    output: PathBuf,
+}
+
+#[derive(Debug, Args)]
+struct OnChainFetchBadgeArgs {
+    #[arg(long)]
+    sequencer_url: String,
+    #[arg(long)]
+    badge_account_id_hex: String,
     #[arg(long)]
     output: PathBuf,
 }
@@ -821,6 +832,20 @@ async fn run_on_chain_command(command: OnChainCommand) -> Result<(), String> {
             println!("Current gate state written to {}", args.output.display());
             println!("Context hash: {}", digest_to_hex(&state.context_hash));
             println!("Claim counter: {}", state.claim_counter);
+        }
+        OnChainCommand::FetchBadge(args) => {
+            let badge_account_id = digest_from_hex(&args.badge_account_id_hex)
+                .map_err(|error| format!("invalid --badge-account-id-hex: {error}"))?;
+            let badge =
+                fetch_on_chain_badge(&args.sequencer_url, badge_account_id, &args.output).await?;
+            println!("Access badge written to {}", args.output.display());
+            println!("Context hash: {}", digest_to_hex(&badge.context_hash));
+            println!(
+                "Presenter key: {}",
+                digest_to_hex(&badge.presenter_public_key)
+            );
+            println!("Claim number: {}", badge.claim_number);
+            println!("Proof issued at: {}", badge.proof_issued_at_unix_ms);
         }
         OnChainCommand::InitializeSubmit(args) => {
             let (transaction_hash, account_id) =

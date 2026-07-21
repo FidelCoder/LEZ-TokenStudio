@@ -131,6 +131,11 @@ RISC0_DEV_MODE=0 proofgate on-chain claim-submit \
   --gate-account-id-hex <gate-account-id> \
   --badge-key badge-account.json \
   --output-lez-proof lez-proof.bin
+
+proofgate on-chain fetch-badge \
+  --sequencer-url http://127.0.0.1:3040 \
+  --badge-account-id-hex <badge-account-id> \
+  --output access-badge.json
 ```
 
 `claim-submit` refetches both public accounts before proving. It rejects a
@@ -139,6 +144,18 @@ badge account, recursively verifies the balance receipt, composes the official
 LEZ PPE receipt, builds the canonical LEZ message, signs it with the
 badge-account key, and calls `sendTransaction`. Signer files are created with
 mode `0600` and are never accepted on the command line.
+
+After inclusion, `fetch-badge` requires the authoritative account to be owned
+by the embedded balance-gate program, decodes the current AccessBadge version,
+and writes its context, presenter key, claim number, and proof issue time as
+JSON. Refetch the gate state as well to observe the incremented counter and
+rotated nonce.
+
+Against an exact local LEZ `v0.2.0` node, the final embedded program deployed
+as `e776135f1f7ebf2dd810c232bd2d3cd75217b44407e12df1c0b1f5fbcf031337`.
+Its initialization transaction was included and its GateState was fetched and
+decoded. Exact transaction and block evidence is recorded in
+[Benchmarks](BENCHMARKS.md).
 
 On-chain proofs have a ten-minute timestamp window. Use an accelerated prover
 for sequencer submission if composition cannot complete inside that window on

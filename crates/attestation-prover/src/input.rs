@@ -15,6 +15,7 @@ use tokenstudio_config::GateConfig;
 
 use crate::{prove_request, ProverError, Risc0AttestationProof};
 
+type SequencerMembershipProof = Option<(usize, Vec<Digest32>)>;
 type SequencerMembershipResponse = (Vec<Option<(usize, Vec<Digest32>)>>, Digest32);
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -95,7 +96,7 @@ pub enum InputError {
     MissingWalletJson,
     #[error("failed to create sequencer RPC client: {0}")]
     RpcClient(String),
-    #[error("sequencer getProofsAndRoot request failed: {0}")]
+    #[error("sequencer membership proof request failed: {0}")]
     RpcRequest(String),
     #[error("sequencer returned {0} membership proof entries; expected exactly one")]
     UnexpectedProofCount(usize),
@@ -129,28 +130,55 @@ pub async fn fetch_sequencer_input(
     let client = HttpClientBuilder::default()
         .build(sequencer_url)
         .map_err(|error| InputError::RpcClient(error.to_string()))?;
-    let (proofs, commitment_root): SequencerMembershipResponse = client
+
+    let current_response: Result<SequencerMembershipResponse, _> = client
         .request(
             "getProofsAndRoot",
             rpc_params![vec![*commitment.as_bytes()]],
         )
-        .await
-        .map_err(|error| InputError::RpcRequest(error.to_string()))?;
+        .await;
 
-    if proofs.len() != 1 {
-        return Err(InputError::UnexpectedProofCount(proofs.len()));
-    }
-    let (leaf_index, siblings) = proofs
-        .into_iter()
-        .next()
-        .flatten()
-        .ok_or(InputError::MissingMembershipProof)?;
+    let (membership_proof, commitment_root) = match current_response {
+        Ok((proofs, root)) => {
+            if proofs.len() != 1 {
+                return Err(InputError::UnexpectedProofCount(proofs.len()));
+            }
+            let (leaf_index, siblings) = proofs
+                .into_iter()
+                .next()
+                .flatten()
+                .ok_or(InputError::MissingMembershipProof)?;
+            (
+                MembershipProof {
+                    leaf_index,
+                    siblings,
+                },
+                root,
+            )
+        }
+        Err(current_error) => {
+            let legacy: SequencerMembershipProof = client
+                .request("getProofForCommitment", rpc_params![*commitment.as_bytes()])
+                .await
+                .map_err(|legacy_error| {
+                    InputError::RpcRequest(format!(
+                        "getProofsAndRoot: {current_error}; \
+                         getProofForCommitment: {legacy_error}"
+                    ))
+                })?;
+            let (leaf_index, siblings) = legacy.ok_or(InputError::MissingMembershipProof)?;
+            let membership_proof = MembershipProof {
+                leaf_index,
+                siblings,
+            };
+            let commitment_root = membership_proof.compute_root(&commitment);
+            (membership_proof, commitment_root)
+        }
+    };
+
     let input = ProverInputFile {
         account: account.clone(),
-        membership_proof: MembershipProof {
-            leaf_index,
-            siblings,
-        },
+        membership_proof,
         commitment_root,
     };
     input.validate_membership()?;
@@ -408,5 +436,17 @@ mod tests {
             private_account_id_from_mention(&format!("Public/{encoded}")),
             Err(InputError::InvalidPrivateAccountMention)
         ));
+    }
+
+    #[tokio::test]
+    #[ignore = "requires a standalone LEZ v0.2.0 sequencer on port 3040"]
+    async fn pinned_v0_2_sequencer_membership_fallback() {
+        let sequencer_url = std::env::var("LEZ_SEQUENCER_URL")
+            .unwrap_or_else(|_| "http://127.0.0.1:3040".to_owned());
+        let input = fetch_sequencer_input(&LezAccount::default(), &sequencer_url)
+            .await
+            .unwrap();
+
+        input.validate_membership().unwrap();
     }
 }

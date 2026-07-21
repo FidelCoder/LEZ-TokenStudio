@@ -6,7 +6,9 @@
   adapters, and asset-specific gate configuration.
 - Added exact LEZ private-account commitment and Merkle membership semantics.
 - Added a Risc0 balance-attestation guest and real succinct host proving.
-- Added wallet snapshot and sequencer `getProofsAndRoot` input acquisition.
+- Added wallet snapshot and sequencer `getProofsAndRoot` input acquisition,
+  including a `getProofForCommitment` fallback for the pinned LEZ `v0.2.0`
+  RPC.
 - Added challenge-bound local verification, deterministic denials, persistent
   replay protection, and restricted presenter key files.
 - Added the SPEL `balance_gate` program, generated IDL, access badges, nonce
@@ -19,3 +21,6 @@
   and protocol documentation.
 - Added a Basecamp `ui_qml` module for token, gate, prove, verify, Messaging,
   and on-chain workflows.
+- Corrected SPEL initialization and badge creation ownership so LEZ applies the
+  authorized program owner after guest execution.
+- Added authoritative access-badge fetching and decoding by sequencer RPC.

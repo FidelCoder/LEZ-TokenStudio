@@ -17,7 +17,8 @@ its on-chain and off-chain consumers.
 - Exact LEZ `v0.2.0` private-account commitment, token data, and Merkle proofs.
 - Risc0 3.0.5 guest proving membership, token identity, and
   `hidden_balance >= threshold`.
-- Fixture and live wallet/sequencer proof input through `getProofsAndRoot`.
+- Fixture and live wallet/sequencer proof input through `getProofsAndRoot`,
+  with `v0.2.0` `getProofForCommitment` compatibility.
 - Real succinct proving guarded against `RISC0_DEV_MODE` and verified on output.
 - Fresh Ed25519 presenter challenges, exact policy checks, deterministic errors,
   cross-process replay locking, and forwarding rejection.
@@ -145,13 +146,22 @@ The Basecamp module source and `.lgx` build instructions are in
 A real succinct balance receipt has been generated and verified locally. The
 SPEL guest executes in LEZ's real guest executor, deterministic failures are
 covered, the current IDL is committed, and the Messaging protocol passes a
-receipt-sized 220 KB fixture.
+receipt-sized 220 KB fixture. The final gate ELF has also been deployed to an
+exact standalone LEZ `v0.2.0` sequencer; its initialization transaction was
+included and the resulting program-owned state was fetched and decoded. The
+official two-node Chat doctest passed 20/20, and a fresh real proof completed
+encrypted challenge delivery, 11-message proof transfer, local verification,
+GroupV2 admission, forwarding denial, and replay denial. The installable LGX
+also passed all four official Logos Qt integration tests and produced a
+non-empty 1024 by 768 render.
 
-The signed sequencer submission code is implemented and locally unit tested;
-acceptance by a live sequencer, live two-node Messaging, and `.lgx` packaging
-require external runtimes that are not installed in this workspace. They are
-explicitly tracked in [Implementation Status](docs/STATUS.md), not represented
-as completed evidence. Benchmark results and limits are in
+The signed private claim path is implemented and locally unit tested, while a
+fresh recursively composed claim still requires prover acceleration to fit the
+ten-minute validity window. Full-client Basecamp installation and narrow-window
+review, testnet/cost evidence, the narrated video, and owner approval remain
+external work. They are explicitly tracked in [Implementation
+Status](docs/STATUS.md), not represented as completed evidence. Benchmark
+results and limits are in
 [Benchmarks](docs/BENCHMARKS.md).
 
 ## Documentation
@@ -165,6 +175,9 @@ as completed evidence. Benchmark results and limits are in
 - [Error Codes](docs/ERROR_CODES.md)
 - [Token Setup](docs/TOKEN_SETUP.md)
 - [LEZ Compatibility](docs/LEZ_COMPATIBILITY.md)
+- [Local LEZ v0.2.0 Evidence](docs/evidence/LOCAL_LEZ_V0_2_0.md)
+- [Live Logos Messaging Evidence](docs/evidence/LIVE_LOGOS_MESSAGING.md)
+- [Official Basecamp Integration Evidence](docs/evidence/BASECAMP_INTEGRATION.md)
 - [LP-0005 Execution Plan](docs/LP-0005_EXECUTION_PLAN.md)
 - [Submission Playbook](docs/LAMBDA_PRIZE_SUBMISSION.md)
 

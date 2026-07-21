@@ -300,6 +300,7 @@ Item {
                             placeholderText: "64 hexadecimal characters"
                         }
                         LabeledField { id: lezProof; label: "LEZ proof output"; text: "lez-proof.bin" }
+                        LabeledField { id: badgeOutput; label: "Access badge output"; text: "access-badge.json" }
                     }
 
                     Flow {
@@ -432,6 +433,19 @@ Item {
                                 "--gate-account-id-hex", gateAccount.text,
                                 "--badge-key", badgeAccountKey.text,
                                 "--output-lez-proof", lezProof.text
+                            ])
+                        }
+                        Button {
+                            text: "Fetch access badge"
+                            enabled: !root.busy
+                                && sequencerUrl.text.length > 0
+                                && claimAccount.text.length === 64
+                                && badgeOutput.text.length > 0
+                            onClicked: root.controller.runOperation("Fetch LEZ access badge", [
+                                "on-chain", "fetch-badge",
+                                "--sequencer-url", sequencerUrl.text,
+                                "--badge-account-id-hex", claimAccount.text,
+                                "--output", badgeOutput.text
                             ])
                         }
                     }

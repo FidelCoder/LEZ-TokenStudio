@@ -17,8 +17,8 @@ use attestation_verifier::{
     VerifyRequest,
 };
 use balance_gate_core::{
-    decode_gate_state, on_chain_presentation_message, ClaimAccess, GateState,
-    OnChainAttestationJournal, OnChainChallenge,
+    decode_access_badge, decode_gate_state, on_chain_presentation_message, AccessBadge,
+    ClaimAccess, GateState, OnChainAttestationJournal, OnChainChallenge, ACCESS_BADGE_VERSION,
 };
 use balance_gate_methods::BALANCE_GATE_ID;
 use base64::{engine::general_purpose::STANDARD as BASE64_STANDARD, Engine as _};
@@ -180,6 +180,18 @@ pub async fn fetch_on_chain_state(
     let state = validated_gate_state(&account, account_id)?;
     write_json(output, &state)?;
     Ok(state)
+}
+
+pub async fn fetch_on_chain_badge(
+    sequencer_url: &str,
+    badge_account_id: Digest32,
+    output: &Path,
+) -> Result<AccessBadge, String> {
+    let account_id = AccountId::new(badge_account_id);
+    let account = fetch_public_account(sequencer_url, account_id).await?;
+    let badge = validated_access_badge(&account, account_id)?;
+    write_json(output, &badge)?;
+    Ok(badge)
 }
 
 pub async fn submit_on_chain_initialization(
@@ -596,6 +608,24 @@ fn validated_gate_state(account: &Account, account_id: AccountId) -> Result<Gate
     Ok(state)
 }
 
+fn validated_access_badge(account: &Account, account_id: AccountId) -> Result<AccessBadge, String> {
+    if account.program_owner != BALANCE_GATE_ID {
+        return Err(format!(
+            "account {account_id} is not owned by balance_gate {}",
+            program_owner_to_hex(&balance_gate_program_id())
+        ));
+    }
+    let badge = decode_access_badge(account.data.as_ref())
+        .map_err(|error| format!("account {account_id} has invalid access badge: {error}"))?;
+    if badge.version != ACCESS_BADGE_VERSION {
+        return Err(format!(
+            "account {account_id} has unsupported access badge version {}",
+            badge.version
+        ));
+    }
+    Ok(badge)
+}
+
 async fn send_lez_transaction<T: borsh::BorshSerialize>(
     sequencer_url: &str,
     variant_tag: u8,
@@ -726,6 +756,7 @@ fn create_parent(path: &Path) -> Result<(), String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use balance_gate_core::encode_access_badge;
 
     fn temporary_path(name: &str) -> std::path::PathBuf {
         std::env::temp_dir().join(format!(
@@ -778,6 +809,43 @@ mod tests {
         assert_eq!(deployment[0], 2);
         assert_eq!(LEZ_TX_PUBLIC_TAG, 0);
         assert_eq!(LEZ_TX_PRIVATE_TAG, 1);
+    }
+
+    #[test]
+    fn access_badge_requires_the_gate_owner_and_current_version() {
+        let account_id = AccountId::new([7; 32]);
+        let badge = AccessBadge {
+            version: ACCESS_BADGE_VERSION,
+            context_hash: [1; 32],
+            presenter_public_key: [2; 32],
+            claim_number: 3,
+            proof_issued_at_unix_ms: 4,
+        };
+        let account = Account {
+            program_owner: BALANCE_GATE_ID,
+            data: encode_access_badge(&badge).unwrap().try_into().unwrap(),
+            ..Account::default()
+        };
+        assert_eq!(validated_access_badge(&account, account_id).unwrap(), badge);
+
+        let wrong_owner = Account {
+            program_owner: DEFAULT_PROGRAM_ID,
+            ..account.clone()
+        };
+        assert!(validated_access_badge(&wrong_owner, account_id).is_err());
+
+        let unsupported = AccessBadge {
+            version: ACCESS_BADGE_VERSION + 1,
+            ..badge
+        };
+        let wrong_version = Account {
+            data: encode_access_badge(&unsupported)
+                .unwrap()
+                .try_into()
+                .unwrap(),
+            ..account
+        };
+        assert!(validated_access_badge(&wrong_version, account_id).is_err());
     }
 
     #[test]

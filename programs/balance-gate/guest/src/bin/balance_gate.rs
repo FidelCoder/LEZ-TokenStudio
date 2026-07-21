@@ -21,7 +21,7 @@ mod balance_gate {
 
     #[instruction]
     pub fn initialize(
-        ctx: ProgramContext,
+        _ctx: ProgramContext,
         #[account(init, signer)] mut gate: AccountWithMetadata,
         context_hash: [u8; 32],
         token_program_owner: [u32; 8],
@@ -39,7 +39,6 @@ mod balance_gate {
             challenge_nonce,
         );
         state.validate().unwrap_or_else(|error| fail_claim(error));
-        gate.account.program_owner = ctx.self_program_id;
         gate.account.data = encode_gate_state(&state)
             .unwrap_or_else(|_| fail(2005, "cannot encode gate state"))
             .try_into()
@@ -80,7 +79,6 @@ mod balance_gate {
             .unwrap_or_else(|_| fail(2005, "cannot encode gate state"))
             .try_into()
             .unwrap_or_else(|_| fail(2005, "gate state is too large"));
-        badge.account.program_owner = ctx.self_program_id;
         badge.account.data = encode_access_badge(&result.badge)
             .unwrap_or_else(|_| fail(2005, "cannot encode access badge"))
             .try_into()

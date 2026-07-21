@@ -74,13 +74,19 @@ availability dependency.
   challenge, presenter, replay, and transport-integrity failures.
 - [x] Real `RISC0_DEV_MODE=0` balance proof generation and verification have
   been measured.
+- [x] Deploy the final gate ELF to an exact local LEZ `v0.2.0` sequencer,
+  include initialization, and decode the authoritative GateState.
+- [x] Build an installable Basecamp `.lgx` from the module source.
+- [x] Pass the official Logos Qt integration suite with backend loading,
+  complete workflow navigation, and a non-empty desktop render.
 - [ ] Publish a green CI run from the final public/default branch.
-- [ ] Build and attach the Basecamp `.lgx`; load it in Basecamp and capture
-  desktop/narrow-window evidence.
-- [ ] Run the encrypted two-instance Chat demo and record GroupV2 membership
-  confirmation.
-- [ ] Run `claim-submit` against a standalone LEZ sequencer with an
-  accelerated prover and record the accepted transaction.
+- [ ] Load the Basecamp `.lgx` in the full client and capture narrow-window
+  visual-review evidence.
+- [x] Run the encrypted two-instance Chat demo with a real proof and record the
+  asynchronous GroupV2 membership commit plus forwarding/replay denial.
+- [ ] Run a fresh `claim-submit` against the standalone sequencer with an
+  accelerated prover; record claim inclusion, badge state, rotation, and replay
+  rejection.
 - [ ] Deploy the verifier to LEZ devnet/testnet and add the verified program ID.
 - [ ] Record initialization/claim compute-unit or transaction-cost results.
 - [ ] Record and link the narrated end-to-end video showing both paths and
@@ -115,14 +121,22 @@ that changed after claim signing. Stable denial codes are documented.
 On an Intel i5-7300U without prover acceleration, a warm real balance proof
 took 206.65 seconds and produced a 223,970-byte receipt. The JSON proof was
 299,244 bytes and its Logos Chat envelope used ten 32-KiB chunks plus one
-manifest. Recursive composition did not complete reliably on this machine;
-accepted sequencer CU/cost and accelerated composition timings remain required.
+manifest. A later fresh live proof produced the same receipt size; its
+299,730-byte signed presentation crossed `logos.test` in those 11 messages and
+completed real GroupV2 admission. Recursive composition did not complete
+reliably on this machine; accepted sequencer CU/cost and accelerated
+composition timings remain required.
 
 ### Supportability
 
+The final local gate program ID is
+`e776135f1f7ebf2dd810c232bd2d3cd75217b44407e12df1c0b1f5fbcf031337`.
+Its deployment and initialization were included by an exact standalone LEZ
+`v0.2.0` node; the decoded gate state has claim counter zero.
+
 The workspace is split into versioned types, compatibility, circuit, prover,
 verifier, gate, Messaging, configuration, and CLI crates. Local evidence
-includes strict formatting, strict Clippy, 67 passing unit tests, generated-IDL
+includes strict formatting, strict Clippy, 69 passing unit tests, generated-IDL
 equality, shell syntax checks, and explicit external-validation tracking.
 
 ## Supporting Materials
@@ -134,7 +148,12 @@ equality, shell syntax checks, and explicit external-validation tracking.
 - [Privacy model](PRIVACY_MODEL.md)
 - [Benchmarks](BENCHMARKS.md)
 - [Implementation status](STATUS.md)
+- [Local LEZ v0.2.0 evidence](evidence/LOCAL_LEZ_V0_2_0.md)
+- [Live Logos Messaging evidence](evidence/LIVE_LOGOS_MESSAGING.md)
+- [Official Basecamp integration evidence](evidence/BASECAMP_INTEGRATION.md)
 - **Narrated demo:** TODO
+- **Verified local program ID:**
+  `e776135f1f7ebf2dd810c232bd2d3cd75217b44407e12df1c0b1f5fbcf031337`
 - **Verified testnet program ID:** TODO
 - **CI run:** TODO
 

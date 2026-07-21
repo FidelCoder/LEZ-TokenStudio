@@ -8,10 +8,10 @@
 #include "logos_ui_plugin_context.h"
 #include "rep_proofgate_ui_source.h"
 
-class ProofGateUiBackend : public ProofGateUiSimpleSource, public LogosUiPluginContext {
+class TokenstudioProofgateUiBackend : public ProofGateUiSimpleSource, public LogosUiPluginContext {
 public:
-    ProofGateUiBackend();
-    ~ProofGateUiBackend() override;
+    TokenstudioProofgateUiBackend();
+    ~TokenstudioProofgateUiBackend() override;
 
     void onContextReady() override;
 

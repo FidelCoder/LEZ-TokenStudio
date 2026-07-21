@@ -14,8 +14,8 @@ logos_module(
     NAME tokenstudio_proofgate_ui
     REP_FILE src/proofgate_ui.rep
     SOURCES
-        src/proofgate_ui_backend.h
-        src/proofgate_ui_backend.cpp
+        src/tokenstudio_proofgate_ui_backend.h
+        src/tokenstudio_proofgate_ui_backend.cpp
     INCLUDE_DIRS
         src
 )

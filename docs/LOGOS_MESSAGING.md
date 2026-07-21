@@ -5,6 +5,11 @@ ProofGate transports private balance presentations through the official
 by its `delivery_module` dependency. Verification remains local: the receiver
 does not call a hosted ProofGate service or expose the receipt over HTTP.
 
+The complete flow has been validated against two isolated Logos Core daemons
+on `logos.test`: a 223,970-byte real receipt crossed Chat in ten chunks plus one
+manifest, verified locally, and resulted in observed GroupV2 membership. See
+the [live evidence record](evidence/LIVE_LOGOS_MESSAGING.md).
+
 ## Runtime Boundary
 
 The Rust adapter invokes the headless Logos Core CLI without a shell:

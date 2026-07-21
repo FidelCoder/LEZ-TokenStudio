@@ -15,9 +15,10 @@ the Risc0 guest. `balance-attestation-methods` builds the guest ELF and generate
 image ID. `attestation-image-id` stores the independently checked image ID so
 the guest does not depend on its own generated artifact.
 
-`attestation-prover` reads fixture or wallet snapshots, calls sequencer
-`getProofsAndRoot`, builds the witness, creates a real succinct receipt, and
-verifies it before returning.
+`attestation-prover` reads fixture or wallet snapshots, obtains a sequencer
+membership proof through current `getProofsAndRoot` or the pinned `v0.2.0`
+`getProofForCommitment` fallback, builds the witness, creates a real succinct
+receipt, and verifies it before returning.
 
 `attestation-verifier` verifies the receipt and exact gate policy, then checks
 a domain-separated Ed25519 presentation over a fresh verifier challenge.
