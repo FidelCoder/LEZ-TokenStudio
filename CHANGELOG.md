@@ -21,6 +21,9 @@
   and protocol documentation.
 - Added a Basecamp `ui_qml` module for token, gate, prove, verify, Messaging,
   and on-chain workflows.
+- Made the Basecamp proof workflow populate presenter keys automatically,
+  default to the bundled witness path, and reject missing proof inputs before
+  starting a presentation.
 - Corrected SPEL initialization and badge creation ownership so LEZ applies the
   authorized program owner after guest execution.
 - Added authoritative access-badge fetching and decoding by sequencer RPC.

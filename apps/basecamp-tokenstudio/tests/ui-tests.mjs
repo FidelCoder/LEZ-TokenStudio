@@ -35,7 +35,13 @@ test("ProofGate: navigates every primary workflow", async (app) => {
   await app.expectTexts(["Gate", "Prove", "Verify"]);
 
   await app.click("Prove", { exact: true });
-  await app.expectTexts(["Presenter", "Balance proof", "Presentation", "Generate proof"]);
+  await app.expectTexts([
+    "Presenter",
+    "Balance proof",
+    "Presentation",
+    "witness.json",
+    "Generate proof",
+  ]);
 
   await app.click("Verify", { exact: true });
   await app.expectTexts(["Local", "Messaging", "On-chain", "Verify locally"]);

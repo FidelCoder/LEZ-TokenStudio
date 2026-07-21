@@ -23,6 +23,43 @@ QString normalizedPath(const QString& value) {
     return path;
 }
 
+QString validateRequiredInputs(const QStringList& arguments) {
+    if (arguments.isEmpty()) {
+        return {};
+    }
+
+    QStringList requiredFlags;
+    if (arguments.first() == QStringLiteral("prove")) {
+        requiredFlags = {QStringLiteral("--gate")};
+        if (arguments.contains(QStringLiteral("--input"))) {
+            requiredFlags.append(QStringLiteral("--input"));
+        }
+        if (arguments.contains(QStringLiteral("--account-snapshot"))) {
+            requiredFlags.append(QStringLiteral("--account-snapshot"));
+        }
+    } else if (arguments.first() == QStringLiteral("present")) {
+        requiredFlags = {
+            QStringLiteral("--proof"),
+            QStringLiteral("--challenge"),
+            QStringLiteral("--presenter-key"),
+        };
+    }
+
+    for (const QString& flag : requiredFlags) {
+        const qsizetype index = arguments.indexOf(flag);
+        if (index < 0 || index + 1 >= arguments.size()) {
+            continue;
+        }
+        const QString path = normalizedPath(arguments.at(index + 1));
+        const QFileInfo file(path);
+        if (!file.isFile() || !file.isReadable()) {
+            return QStringLiteral("Required input file is missing or unreadable: %1 (%2)")
+                .arg(path, flag);
+        }
+    }
+    return {};
+}
+
 } // namespace
 
 TokenstudioProofgateUiBackend::TokenstudioProofgateUiBackend()
@@ -97,6 +134,13 @@ bool TokenstudioProofgateUiBackend::start(QString operation, QStringList argumen
         ProofGateUiSimpleSource::setLastError(
             QStringLiteral("ProofGate binary is not executable: %1").arg(binary)
         );
+        return false;
+    }
+    const QString inputError = validateRequiredInputs(arguments);
+    if (!inputError.isEmpty()) {
+        ProofGateUiSimpleSource::setLastOutput({});
+        ProofGateUiSimpleSource::setLastError(inputError);
+        ProofGateUiSimpleSource::setLastExitCode(-1);
         return false;
     }
 

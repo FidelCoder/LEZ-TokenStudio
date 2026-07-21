@@ -9,7 +9,33 @@ ScrollView {
     id: root
     required property var controller
     readonly property bool busy: controller.backend ? controller.backend.busy : false
+    property string trackedOperation: ""
     clip: true
+
+    function runTracked(operation, label, arguments) {
+        root.trackedOperation = operation
+        if (!root.controller.runOperation(label, arguments))
+            root.trackedOperation = ""
+    }
+
+    function publicKeyFromOutput(output) {
+        const matches = String(output).match(/[0-9a-fA-F]{64}/g)
+        return matches && matches.length > 0
+            ? matches[matches.length - 1].toLowerCase()
+            : ""
+    }
+
+    Connections {
+        target: root.controller.backend
+        function onOperationFinished(success, exitCode, output, error) {
+            if (success && root.trackedOperation === "presenter-key") {
+                const publicKey = root.publicKeyFromOutput(output)
+                if (publicKey.length === 64)
+                    presenterPublicKey.text = publicKey
+            }
+            root.trackedOperation = ""
+        }
+    }
 
     ColumnLayout {
         width: Math.max(root.availableWidth, 320)
@@ -30,7 +56,8 @@ ScrollView {
             LabeledField {
                 id: presenterPublicKey
                 label: "Presenter public key (hex)"
-                placeholderText: "Generate the key, then paste its public key"
+                placeholderText: "64 hexadecimal characters"
+                validator: RegularExpressionValidator { regularExpression: /[0-9a-fA-F]{64}/ }
             }
         }
 
@@ -39,14 +66,14 @@ ScrollView {
             Button {
                 text: "Read public key"
                 enabled: !root.busy && presenterKey.text.length > 0
-                onClicked: root.controller.runOperation("Read presenter public key", [
+                onClicked: root.runTracked("presenter-key", "Read presenter public key", [
                     "presenter", "public-key", "--key", presenterKey.text
                 ])
             }
             Button {
                 text: "Generate key"
                 enabled: !root.busy && presenterKey.text.length > 0
-                onClicked: root.controller.runOperation("Generate presenter key", [
+                onClicked: root.runTracked("presenter-key", "Generate presenter key", [
                     "presenter", "generate", "--output", presenterKey.text
                 ])
             }
@@ -91,7 +118,7 @@ ScrollView {
                 id: witnessInput
                 label: "Private witness JSON"
                 visible: witnessMode.checked
-                placeholderText: "witness.json"
+                text: "witness.json"
             }
             LabeledField {
                 id: accountSnapshot
