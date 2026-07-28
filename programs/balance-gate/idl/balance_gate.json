@@ -126,6 +126,10 @@
             }
           },
           {
+            "name": "max_proof_age_ms",
+            "type": "u64"
+          },
+          {
             "name": "challenge_nonce",
             "type": {
               "array": [
@@ -256,6 +260,10 @@
         },
         {
           "name": "expires_at_unix_ms",
+          "type": "u64"
+        },
+        {
+          "name": "max_proof_age_ms",
           "type": "u64"
         },
         {

@@ -40,9 +40,12 @@ challenge timestamps, receipt bytes, presenter signature, and transport label.
 Logos Chat encrypts message content, but normal network and chat metadata remain
 subject to the privacy properties of Logos Messaging itself.
 
-On-chain claims reveal the badge account being initialized, gate state update,
-validity window, and access badge fields. LEZ private execution hides private
-account identities according to its own circuit and transaction model.
+The on-chain transaction reveals the public gate account update, validity
+window, encrypted private post-state, private commitment, and initialization
+nullifier. The private badge account ID and AccessBadge plaintext are not placed
+in the public post-state or canonical public-account list. The holder retains
+the badge plaintext locally, while LEZ private execution protects it according
+to the pinned PPE circuit and transaction model.
 
 ## Linkability
 
@@ -52,14 +55,16 @@ should create a new presenter key for each gate or access context.
 
 The commitment root and token definition can also correlate proofs generated
 against the same state snapshot and asset. ProofGate makes these public because
-the verifier must know which state and token policy were proven.
+the verifier must know which state and token policy were proven. Private
+commitments and nullifiers have LEZ's normal transaction-level linkability
+properties.
 
 ## Root Trust And Freshness
 
 The verifier or gate operator chooses the sequencer endpoint it trusts. The
 off-chain verifier reads a root from that endpoint and commits it into
 VerificationChallenge v2. The on-chain operator stores an authorized root in
-GateState v2. Both paths reject a valid receipt whose journal contains any
+GateState v3. Both paths reject a valid receipt whose journal contains any
 other root with deterministic code `1013`.
 
 Off-chain verification also requires the verifier's retained challenge file.
@@ -76,7 +81,8 @@ consensus finality.
 An authorized root is a snapshot. A verifier should issue a fresh challenge
 from its current trusted root. An on-chain gate currently requires a new
 GateState when its operator wants to authorize a newer root; root rotation is
-not an implemented instruction.
+not an implemented instruction. GateState's bounded proof-age field limits how
+long a receipt against that root can be claimed.
 
 ## Non-Goals
 

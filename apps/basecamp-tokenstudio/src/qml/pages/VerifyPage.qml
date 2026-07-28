@@ -28,12 +28,14 @@ Item {
         target: root.controller.backend
         function onOperationFinished(success, exitCode, output, error) {
             if (success && root.trackedOperation.length > 0) {
-                const commitmentRoot = root.hexFromOutput(output)
-                if (commitmentRoot.length === 64) {
+                const value = root.hexFromOutput(output)
+                if (value.length === 64) {
                     if (root.trackedOperation === "messaging-root")
-                        messageRoot.text = commitmentRoot
+                        messageRoot.text = value
                     else if (root.trackedOperation === "chain-root")
-                        chainRoot.text = commitmentRoot
+                        chainRoot.text = value
+                    else if (root.trackedOperation === "badge-account-id")
+                        claimAccount.text = value
                 }
             }
             root.trackedOperation = ""
@@ -318,7 +320,7 @@ Item {
 
                     SectionHeader {
                         title: "LEZ access badge"
-                        detail: "Deploy, initialize, prove, and submit through a LEZ sequencer"
+                        detail: "Deploy a public gate and issue an encrypted private access badge"
                     }
 
                     GridLayout {
@@ -340,6 +342,12 @@ Item {
                             label: "Initial challenge nonce (hex)"
                             placeholderText: "64 hexadecimal characters"
                         }
+                        LabeledField {
+                            id: maxProofAge
+                            label: "Maximum proof age (ms)"
+                            text: "600000"
+                            validator: RegularExpressionValidator { regularExpression: /[0-9]{5,8}/ }
+                        }
                         LabeledField { id: chainProof; label: "Balance proof"; text: "proof.json" }
                         LabeledField {
                             id: chainRoot
@@ -350,10 +358,10 @@ Item {
                         LabeledField { id: chainKey; label: "Presenter key"; text: "presenter.json" }
                         LabeledField {
                             id: claimAccount
-                            label: "Badge account ID (hex)"
+                            label: "Private badge account ID (hex)"
                             placeholderText: "64 hexadecimal characters"
                         }
-                        LabeledField { id: badgeAccountKey; label: "Badge account key"; text: "badge-account.json" }
+                        LabeledField { id: badgeAccountKey; label: "Private badge key"; text: "badge-account.json" }
                         LabeledField { id: chainClaim; label: "Claim output"; text: "claim.json" }
                         LabeledField {
                             id: gateAccount
@@ -397,11 +405,14 @@ Item {
                                 && chainNonce.text.length === 64
                                 && chainRoot.text.length === 64
                                 && chainGate.text.length > 0
+                                && Number(maxProofAge.text) >= 60000
+                                && Number(maxProofAge.text) <= 86400000
                             onClicked: root.controller.runOperation("Initialize on-chain gate", [
                                 "on-chain", "init",
                                 "--gate", chainGate.text,
                                 "--commitment-root-hex", chainRoot.text,
                                 "--challenge-nonce-hex", chainNonce.text,
+                                "--max-proof-age-ms", maxProofAge.text,
                                 "--output", chainState.text
                             ])
                         }
@@ -436,12 +447,26 @@ Item {
                             ])
                         }
                         Button {
-                            text: "Generate badge account"
+                            text: "Generate private badge account"
                             enabled: !root.busy && badgeAccountKey.text.length > 0
-                            onClicked: root.controller.runOperation("Generate LEZ badge account", [
-                                "on-chain", "account-generate",
-                                "--output", badgeAccountKey.text
-                            ])
+                            onClicked: root.runTracked(
+                                "badge-account-id",
+                                "Generate LEZ private badge account",
+                                [
+                                    "on-chain", "private-account-generate",
+                                    "--output", badgeAccountKey.text
+                                ])
+                        }
+                        Button {
+                            text: "Read private badge ID"
+                            enabled: !root.busy && badgeAccountKey.text.length > 0
+                            onClicked: root.runTracked(
+                                "badge-account-id",
+                                "Read LEZ private badge account ID",
+                                [
+                                    "on-chain", "private-account-id",
+                                    "--key", badgeAccountKey.text
+                                ])
                         }
                         Button {
                             text: "Sign claim"
@@ -478,14 +503,16 @@ Item {
                             text: "Compose LEZ proof"
                             enabled: !root.busy
                                 && gateAccount.text.length === 64
-                                && claimAccount.text.length === 64
+                                && badgeAccountKey.text.length > 0
+                                && badgeOutput.text.length > 0
                             onClicked: root.controller.runOperation("Compose LEZ private execution", [
                                 "on-chain", "compose",
                                 "--proof", chainProof.text,
                                 "--state", chainState.text,
                                 "--claim", chainClaim.text,
                                 "--gate-account-id-hex", gateAccount.text,
-                                "--badge-account-id-hex", claimAccount.text,
+                                "--badge-key", badgeAccountKey.text,
+                                "--output-badge", badgeOutput.text,
                                 "--output-lez-proof", lezProof.text
                             ])
                         }
@@ -495,6 +522,8 @@ Item {
                                 && sequencerUrl.text.length > 0
                                 && gateAccount.text.length === 64
                                 && badgeAccountKey.text.length > 0
+                                && badgeOutput.text.length > 0
+                                && lezProof.text.length > 0
                             onClicked: root.controller.runOperation("Compose and submit LEZ claim", [
                                 "on-chain", "claim-submit",
                                 "--sequencer-url", sequencerUrl.text,
@@ -503,20 +532,8 @@ Item {
                                 "--claim", chainClaim.text,
                                 "--gate-account-id-hex", gateAccount.text,
                                 "--badge-key", badgeAccountKey.text,
+                                "--output-badge", badgeOutput.text,
                                 "--output-lez-proof", lezProof.text
-                            ])
-                        }
-                        Button {
-                            text: "Fetch access badge"
-                            enabled: !root.busy
-                                && sequencerUrl.text.length > 0
-                                && claimAccount.text.length === 64
-                                && badgeOutput.text.length > 0
-                            onClicked: root.controller.runOperation("Fetch LEZ access badge", [
-                                "on-chain", "fetch-badge",
-                                "--sequencer-url", sequencerUrl.text,
-                                "--badge-account-id-hex", claimAccount.text,
-                                "--output", badgeOutput.text
                             ])
                         }
                     }

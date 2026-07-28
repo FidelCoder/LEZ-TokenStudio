@@ -41,8 +41,14 @@ jobs:
         run: |
           bash -n scripts/ci-local.sh
           bash -n scripts/ci-standalone-lez.sh
+          bash -n scripts/ci-standalone-claim.sh
+          bash -n scripts/ci-submission-local.sh
+          bash -n scripts/basecamp-local.sh
           bash -n scripts/demo.sh
           bash -n demos/token-gated-chat/run.sh
+          node --check apps/basecamp-tokenstudio/tests/ui-tests.mjs
+          node --check scripts/check-basecamp-command-contract.mjs
+          node scripts/check-basecamp-command-contract.mjs
           jq -e . apps/basecamp-tokenstudio/metadata.json >/dev/null
           jq -e . programs/balance-gate/idl/balance_gate.json >/dev/null
           generated=$(cargo run --quiet -p balance-gate-methods --example generate_idl | jq -S -c .)

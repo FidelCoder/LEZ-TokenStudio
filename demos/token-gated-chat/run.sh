@@ -14,6 +14,9 @@ set -euo pipefail
 PROOFGATE_BIN="${PROOFGATE_BIN:-target/release/proofgate}"
 LOGOSCORE_BIN="${LOGOSCORE_BIN:-logoscore}"
 WORK_DIR="${WORK_DIR:-/tmp/proofgate-chat-demo}"
+CHAT_CHUNK_BYTES="${CHAT_CHUNK_BYTES:-32768}"
+CHAT_TRANSFER_COPIES="${CHAT_TRANSFER_COPIES:-2}"
+CHAT_MESSAGE_DELAY_MS="${CHAT_MESSAGE_DELAY_MS:-1000}"
 
 command -v jq >/dev/null || { echo "jq is required" >&2; exit 1; }
 test -x "$PROOFGATE_BIN" || { echo "ProofGate binary is not executable: $PROOFGATE_BIN" >&2; exit 1; }
@@ -90,21 +93,20 @@ fi
 echo "Forwarded presentation denied [1008]"
 
 echo "[5/8] Send chunked presentation over encrypted Logos Chat"
-SEND_OUTPUT=$("$PROOFGATE_BIN" messaging send \
-  --logoscore-binary "$LOGOSCORE_BIN" \
-  --config-dir "$HOLDER_CONFIG_DIR" \
-  --conversation-id "$HOLDER_CONVERSATION_ID" \
-  --envelope "$ENVELOPE")
-printf '%s\n' "$SEND_OUTPUT"
-TRANSFER_ID=$(sed -n 's/^Transfer ID: //p' <<<"$SEND_OUTPUT")
-test -n "$TRANSFER_ID" || { echo "send did not return a transfer ID" >&2; exit 1; }
+RECEIVE_LOG="$WORK_DIR/receive-verify.log"
+RECEIVE_PID=""
+stop_receive() {
+  if [[ -n "$RECEIVE_PID" ]]; then
+    kill "$RECEIVE_PID" >/dev/null 2>&1 || true
+    wait "$RECEIVE_PID" >/dev/null 2>&1 || true
+  fi
+}
+trap stop_receive EXIT
 
-echo "[6/8] Receive, verify locally, and request bound group admission"
 "$PROOFGATE_BIN" messaging receive-verify \
   --logoscore-binary "$LOGOSCORE_BIN" \
   --config-dir "$VERIFIER_CONFIG_DIR" \
   --conversation-id "$VERIFIER_CONVERSATION_ID" \
-  --transfer-id "$TRANSFER_ID" \
   --expected-sender "$MEMBER_ADDRESS" \
   --timeout-ms 180000 \
   --gate "$GATE" \
@@ -112,7 +114,39 @@ echo "[6/8] Receive, verify locally, and request bound group admission"
   --replay-cache "$REPLAY_CACHE" \
   --output "$RECEIVED" \
   --admit-group-id "$TARGET_GROUP_ID" \
-  --admit-address "$MEMBER_ADDRESS"
+  --admit-address "$MEMBER_ADDRESS" >"$RECEIVE_LOG" 2>&1 &
+RECEIVE_PID=$!
+
+if ! SEND_OUTPUT=$("$PROOFGATE_BIN" messaging send \
+  --logoscore-binary "$LOGOSCORE_BIN" \
+  --config-dir "$HOLDER_CONFIG_DIR" \
+  --conversation-id "$HOLDER_CONVERSATION_ID" \
+  --chunk-bytes "$CHAT_CHUNK_BYTES" \
+  --copies "$CHAT_TRANSFER_COPIES" \
+  --message-delay-ms "$CHAT_MESSAGE_DELAY_MS" \
+  --envelope "$ENVELOPE" 2>&1); then
+  printf "%s\n" "$SEND_OUTPUT" >&2
+  exit 1
+fi
+printf "%s\n" "$SEND_OUTPUT"
+TRANSFER_ID=$(sed -n "s/^Transfer ID: //p" <<<"$SEND_OUTPUT")
+test -n "$TRANSFER_ID" || { echo "send did not return a transfer ID" >&2; exit 1; }
+
+echo "[6/8] Receive, verify locally, and request bound group admission"
+set +e
+wait "$RECEIVE_PID"
+RECEIVE_STATUS=$?
+set -e
+RECEIVE_PID=""
+cat "$RECEIVE_LOG"
+if [[ $RECEIVE_STATUS -ne 0 ]]; then
+  exit "$RECEIVE_STATUS"
+fi
+grep -Fq "Transfer ID: $TRANSFER_ID" "$RECEIVE_LOG" || {
+  echo "receiver assembled a different transfer" >&2
+  exit 1
+}
+trap - EXIT
 
 echo "[7/8] Wait for asynchronous GroupV2 membership commit"
 ADMITTED=""

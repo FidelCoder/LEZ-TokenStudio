@@ -17,12 +17,14 @@ use lee::{
 };
 use lee_core::{
     account::{Account, AccountId, AccountWithMetadata, Nonce},
+    encryption::ViewingPublicKey,
     program::{InstructionData, ProgramId, ProgramOutput, DEFAULT_PROGRAM_ID},
-    InputAccountIdentity, PrivacyPreservingCircuitInput, PrivacyPreservingCircuitOutput,
+    EncryptedAccountData, Identifier, InputAccountIdentity, NullifierPublicKey, NullifierSecretKey,
+    PrivacyPreservingCircuitInput, PrivacyPreservingCircuitOutput, SharedSecretKey,
 };
 use risc0_zkvm::{
     default_executor, default_prover, serde::to_vec, sha::Digestible as _, ExecutorEnv,
-    MaybePruned, ProverOpts, Receipt, ReceiptClaim,
+    MaybePruned, ProverOpts, Receipt, ReceiptClaim, SessionStats,
 };
 use thiserror::Error;
 
@@ -61,10 +63,42 @@ pub enum LezGateError {
     },
 }
 
+#[derive(Clone)]
+pub struct PrivateBadgeIdentity {
+    pub account_id: AccountId,
+    pub circuit_identity: InputAccountIdentity,
+}
+
+#[must_use]
+pub fn private_badge_identity(
+    nullifier_secret_key: NullifierSecretKey,
+    viewing_public_key: &ViewingPublicKey,
+    identifier: Identifier,
+) -> PrivateBadgeIdentity {
+    let nullifier_public_key = NullifierPublicKey::from(&nullifier_secret_key);
+    let account_id = AccountId::for_regular_private_account(&nullifier_public_key, identifier);
+    let (shared_secret_key, ephemeral_public_key) =
+        SharedSecretKey::encapsulate(viewing_public_key);
+    PrivateBadgeIdentity {
+        account_id,
+        circuit_identity: InputAccountIdentity::PrivateAuthorizedInit {
+            epk: ephemeral_public_key,
+            view_tag: EncryptedAccountData::compute_view_tag(
+                &nullifier_public_key,
+                viewing_public_key,
+            ),
+            ssk: shared_secret_key,
+            nsk: nullifier_secret_key,
+            identifier,
+        },
+    }
+}
+
 #[derive(Clone, Debug)]
 pub struct GateProgramExecution {
     pub output: ProgramOutput,
     pub receipt: Receipt,
+    pub stats: SessionStats,
 }
 
 #[derive(Debug)]
@@ -72,6 +106,8 @@ pub struct ComposedGateExecution {
     pub gate_output: ProgramOutput,
     pub circuit_output: PrivacyPreservingCircuitOutput,
     pub proof: Proof,
+    pub gate_stats: SessionStats,
+    pub outer_stats: SessionStats,
 }
 
 #[must_use]
@@ -101,6 +137,7 @@ pub fn gate_initialization_transaction(
         threshold: state.threshold,
         commitment_root: state.commitment_root,
         expires_at_unix_ms: state.expires_at_unix_ms.unwrap_or(0),
+        max_proof_age_ms: state.max_proof_age_ms,
         challenge_nonce: state.challenge_nonce,
     };
     let message = PublicMessage::try_new(
@@ -114,23 +151,42 @@ pub fn gate_initialization_transaction(
     Ok(PublicTransaction::new(message, witness_set))
 }
 
-pub fn signed_gate_claim_transaction(
+fn validate_private_claim_shape(
+    output: &PrivacyPreservingCircuitOutput,
+) -> Result<(), LezGateError> {
+    let public_post_states = output.public_post_states.len();
+    let encrypted_private_post_states = output.encrypted_private_post_states.len();
+    let commitments = output.new_commitments.len();
+    let nullifiers = output.new_nullifiers.len();
+    if public_post_states != 1
+        || encrypted_private_post_states != 1
+        || commitments != 1
+        || nullifiers != 1
+    {
+        return Err(LezGateError::Transaction(format!(
+            concat!(
+                "private claim requires exactly one public post-state, ",
+                "encrypted private post-state, commitment, and nullifier; got ",
+                "{}, {}, {}, and {}"
+            ),
+            public_post_states, encrypted_private_post_states, commitments, nullifiers
+        )));
+    }
+    Ok(())
+}
+
+pub fn private_gate_claim_transaction(
     composed: ComposedGateExecution,
     gate_account_id: AccountId,
-    gate_nonce: Nonce,
-    badge_account_id: AccountId,
-    badge_nonce: Nonce,
-    badge_private_key: &PrivateKey,
 ) -> Result<PrivacyPreservingTransaction, LezGateError> {
-    ensure_signer(badge_account_id, badge_private_key)?;
+    validate_private_claim_shape(&composed.circuit_output)?;
     let message = PrivateMessage::try_from_circuit_output(
-        vec![gate_account_id, badge_account_id],
-        vec![gate_nonce, badge_nonce],
+        vec![gate_account_id],
+        vec![],
         composed.circuit_output,
     )
     .map_err(|error| LezGateError::Transaction(error.to_string()))?;
-    let witness_set =
-        PrivateWitnessSet::for_message(&message, composed.proof, &[badge_private_key]);
+    let witness_set = PrivateWitnessSet::for_message(&message, composed.proof, &[]);
     Ok(PrivacyPreservingTransaction::new(message, witness_set))
 }
 
@@ -205,12 +261,13 @@ pub fn prove_and_compose_demo_claim(
     state: &GateState,
     gate_account_id: [u8; 32],
     badge_account_id: [u8; 32],
+    badge_identity: InputAccountIdentity,
     claim: ClaimAccess,
     attestation: &Risc0AttestationProof,
 ) -> Result<ComposedGateExecution, LezGateError> {
     let gate_execution =
         prove_demo_gate_claim(state, gate_account_id, badge_account_id, claim, attestation)?;
-    compose_demo_gate_execution(gate_execution)
+    compose_demo_gate_execution(gate_execution, badge_identity)
 }
 
 pub fn prove_demo_gate_claim(
@@ -229,10 +286,11 @@ pub fn prove_demo_gate_claim(
 
 pub fn compose_demo_gate_execution(
     gate_execution: GateProgramExecution,
+    badge_identity: InputAccountIdentity,
 ) -> Result<ComposedGateExecution, LezGateError> {
     compose_private_execution(
         gate_execution,
-        vec![InputAccountIdentity::Public, InputAccountIdentity::Public],
+        vec![InputAccountIdentity::Public, badge_identity],
     )
 }
 
@@ -251,6 +309,47 @@ pub fn execute_gate_claim_conditionally(
         .map_err(|error| LezGateError::ProgramOutput(error.to_string()))
 }
 
+#[cfg(test)]
+fn execute_private_claim_conditionally(
+    pre_states: Vec<AccountWithMetadata>,
+    account_identities: Vec<InputAccountIdentity>,
+    claim: ClaimAccess,
+) -> Result<PrivacyPreservingCircuitOutput, LezGateError> {
+    let assumption = attestation_claim(&claim.journal)?;
+    let env = gate_environment(pre_states, &GateInstruction::Claim { claim }, assumption)?;
+    let gate_session = default_executor()
+        .execute(env, BALANCE_GATE_ELF)
+        .map_err(|error| LezGateError::ProgramExecution(error.to_string()))?;
+    let gate_output: ProgramOutput = gate_session
+        .journal
+        .decode()
+        .map_err(|error| LezGateError::ProgramOutput(error.to_string()))?;
+    let gate_claim = ReceiptClaim::ok(
+        BALANCE_GATE_ID,
+        MaybePruned::Pruned(gate_session.journal.bytes.as_slice().digest()),
+    );
+
+    let mut env_builder = ExecutorEnv::builder();
+    env_builder.add_assumption(risc0_zkvm::FakeReceipt::new(gate_claim));
+    env_builder
+        .write(&PrivacyPreservingCircuitInput {
+            program_outputs: vec![gate_output],
+            account_identities,
+            program_id: BALANCE_GATE_ID,
+        })
+        .map_err(|error| LezGateError::InputEncoding(error.to_string()))?;
+    let env = env_builder
+        .build()
+        .map_err(|error| LezGateError::Environment(error.to_string()))?;
+    let session = default_executor()
+        .execute(env, lee::PRIVACY_PRESERVING_CIRCUIT_ELF)
+        .map_err(|error| LezGateError::ProgramExecution(error.to_string()))?;
+    session
+        .journal
+        .decode()
+        .map_err(|error| LezGateError::OuterOutput(error.to_string()))
+}
+
 pub fn prove_gate_claim(
     pre_states: Vec<AccountWithMetadata>,
     claim: ClaimAccess,
@@ -266,10 +365,11 @@ pub fn prove_gate_claim(
         &GateInstruction::Claim { claim },
         attestation_receipt,
     )?;
-    let receipt = default_prover()
+    let prove_info = default_prover()
         .prove(env, BALANCE_GATE_ELF)
-        .map_err(|error| LezGateError::ProgramProving(error.to_string()))?
-        .receipt;
+        .map_err(|error| LezGateError::ProgramProving(error.to_string()))?;
+    let stats = prove_info.stats;
+    let receipt = prove_info.receipt;
     receipt
         .verify(BALANCE_GATE_ID)
         .map_err(|error| LezGateError::ProgramVerification(error.to_string()))?;
@@ -277,7 +377,11 @@ pub fn prove_gate_claim(
         .journal
         .decode()
         .map_err(|error| LezGateError::ProgramOutput(error.to_string()))?;
-    Ok(GateProgramExecution { output, receipt })
+    Ok(GateProgramExecution {
+        output,
+        receipt,
+        stats,
+    })
 }
 
 pub fn compose_private_execution(
@@ -285,6 +389,7 @@ pub fn compose_private_execution(
     account_identities: Vec<InputAccountIdentity>,
 ) -> Result<ComposedGateExecution, LezGateError> {
     let mut env_builder = ExecutorEnv::builder();
+    let gate_stats = gate_execution.stats.clone();
     env_builder.add_assumption(gate_execution.receipt.clone());
     env_builder
         .write(&PrivacyPreservingCircuitInput {
@@ -296,14 +401,15 @@ pub fn compose_private_execution(
     let env = env_builder
         .build()
         .map_err(|error| LezGateError::Environment(error.to_string()))?;
-    let receipt = default_prover()
+    let prove_info = default_prover()
         .prove_with_opts(
             env,
             lee::PRIVACY_PRESERVING_CIRCUIT_ELF,
             &ProverOpts::succinct(),
         )
-        .map_err(|error| LezGateError::OuterProving(error.to_string()))?
-        .receipt;
+        .map_err(|error| LezGateError::OuterProving(error.to_string()))?;
+    let outer_stats = prove_info.stats;
+    let receipt = prove_info.receipt;
     receipt
         .verify(lee::PRIVACY_PRESERVING_CIRCUIT_ID)
         .map_err(|error| LezGateError::OuterVerification(error.to_string()))?;
@@ -318,6 +424,8 @@ pub fn compose_private_execution(
         gate_output: gate_execution.output,
         circuit_output,
         proof: Proof::from_inner(proof_bytes),
+        gate_stats,
+        outer_stats,
     })
 }
 
@@ -399,6 +507,10 @@ mod tests {
     };
 
     fn fixture() -> (Vec<AccountWithMetadata>, ClaimAccess) {
+        fixture_for_badge(AccountId::new([8; 32]))
+    }
+
+    fn fixture_for_badge(badge_account_id: AccountId) -> (Vec<AccountWithMetadata>, ClaimAccess) {
         let context = GateContext {
             application_id: "tokenstudio".to_owned(),
             gate_id: "founders".to_owned(),
@@ -410,7 +522,6 @@ mod tests {
         };
         let state = GateState::new(&context, [9; 32], [5; 32]);
         let gate_account_id = AccountId::new([6; 32]);
-        let badge_account_id = AccountId::new([8; 32]);
         let gate = AccountWithMetadata::new(
             Account {
                 program_owner: BALANCE_GATE_ID,
@@ -460,8 +571,16 @@ mod tests {
 
     #[test]
     fn initialization_requests_protocol_ownership_without_mutating_owner() {
-        let state =
-            GateState::from_public_inputs([2; 32], [3; 8], [4; 32], 100, [9; 32], None, [5; 32]);
+        let state = GateState::from_public_inputs(
+            [2; 32],
+            [3; 8],
+            [4; 32],
+            100,
+            [9; 32],
+            None,
+            balance_gate_core::DEFAULT_ON_CHAIN_PROOF_AGE_MS,
+            [5; 32],
+        );
         let instruction = GateInstruction::Initialize {
             context_hash: state.context_hash,
             token_program_owner: state.token_program_owner,
@@ -469,6 +588,7 @@ mod tests {
             threshold: state.threshold,
             commitment_root: state.commitment_root,
             expires_at_unix_ms: 0,
+            max_proof_age_ms: state.max_proof_age_ms,
             challenge_nonce: state.challenge_nonce,
         };
         let instruction_data = to_vec(&instruction).unwrap();
@@ -527,6 +647,46 @@ mod tests {
     }
 
     #[test]
+    #[ignore = "execution-only Risc0 fake receipt requires RISC0_DEV_MODE=1"]
+    fn private_badge_execution_has_a_sequencer_acceptable_shape() {
+        let nullifier_secret_key = [7_u8; 32];
+        let viewing_public_key = ViewingPublicKey::from_seed(&[8_u8; 32], &[9_u8; 32]);
+        let identity = private_badge_identity(nullifier_secret_key, &viewing_public_key, 11);
+        let (pre_states, claim) = fixture_for_badge(identity.account_id);
+
+        let mut output = execute_private_claim_conditionally(
+            pre_states,
+            vec![InputAccountIdentity::Public, identity.circuit_identity],
+            claim,
+        )
+        .unwrap();
+
+        assert_eq!(output.public_post_states.len(), 1);
+        assert_eq!(output.encrypted_private_post_states.len(), 1);
+        assert_eq!(output.new_commitments.len(), 1);
+        assert_eq!(output.new_nullifiers.len(), 1);
+        validate_private_claim_shape(&output).unwrap();
+
+        output.new_nullifiers.clear();
+        assert!(matches!(
+            validate_private_claim_shape(&output),
+            Err(LezGateError::Transaction(_))
+        ));
+    }
+
+    #[test]
+    fn configured_proof_age_controls_the_lez_timestamp_window() {
+        let (mut pre_states, claim) = fixture();
+        let mut state = decode_gate_state(pre_states[0].account.data.as_ref()).unwrap();
+        state.max_proof_age_ms = 90_000;
+        pre_states[0].account.data = encode_gate_state(&state).unwrap().try_into().unwrap();
+
+        let output = execute_gate_claim_conditionally(pre_states, claim).unwrap();
+
+        assert_eq!(output.timestamp_validity_window.end(), Some(91_001));
+    }
+
+    #[test]
     fn wrong_presenter_signature_fails_before_receipt_composition() {
         let (pre_states, mut claim) = fixture();
         claim.presenter_signature[0] ^= 1;
@@ -541,8 +701,16 @@ mod tests {
     fn initialization_transaction_is_signed_by_the_gate_account() {
         let private_key = PrivateKey::try_new([1; 32]).unwrap();
         let gate_account_id = signer_account_id(&private_key);
-        let state =
-            GateState::from_public_inputs([2; 32], [3; 8], [4; 32], 100, [9; 32], None, [5; 32]);
+        let state = GateState::from_public_inputs(
+            [2; 32],
+            [3; 8],
+            [4; 32],
+            100,
+            [9; 32],
+            None,
+            balance_gate_core::DEFAULT_ON_CHAIN_PROOF_AGE_MS,
+            [5; 32],
+        );
 
         let tx =
             gate_initialization_transaction(&state, gate_account_id, 7_u128.into(), &private_key)
@@ -553,11 +721,32 @@ mod tests {
     }
 
     #[test]
-    fn signed_claim_transaction_rejects_a_different_badge_signer() {
-        let badge_private_key = PrivateKey::try_new([1; 32]).unwrap();
-        let different_badge_id = signer_account_id(&PrivateKey::try_new([2; 32]).unwrap());
-        let error = ensure_signer(different_badge_id, &badge_private_key).unwrap_err();
+    fn gate_signer_validation_rejects_a_different_key() {
+        let gate_private_key = PrivateKey::try_new([1; 32]).unwrap();
+        let different_gate_id = signer_account_id(&PrivateKey::try_new([2; 32]).unwrap());
+        let error = ensure_signer(different_gate_id, &gate_private_key).unwrap_err();
 
         assert!(matches!(error, LezGateError::WrongSigner { .. }));
+    }
+
+    #[test]
+    fn private_badge_identity_is_bound_to_its_nullifier_key() {
+        let nullifier_secret_key = [7_u8; 32];
+        let viewing_public_key = ViewingPublicKey::from_seed(&[8_u8; 32], &[9_u8; 32]);
+        let identity = private_badge_identity(nullifier_secret_key, &viewing_public_key, 11);
+        let expected_id = AccountId::for_regular_private_account(
+            &NullifierPublicKey::from(&nullifier_secret_key),
+            11,
+        );
+
+        assert_eq!(identity.account_id, expected_id);
+        assert!(matches!(
+            identity.circuit_identity,
+            InputAccountIdentity::PrivateAuthorizedInit {
+                nsk,
+                identifier: 11,
+                ..
+            } if nsk == nullifier_secret_key
+        ));
     }
 }

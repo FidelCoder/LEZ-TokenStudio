@@ -64,10 +64,14 @@ test("ProofGate: navigates every primary workflow", async (app) => {
   await app.expectTexts([
     "LEZ access badge",
     "Authorized commitment root (hex)",
+    "Maximum proof age (ms)",
+    "600000",
     "Read sequencer root",
     "Deploy program",
+    "Generate private badge account",
+    "Read private badge ID",
+    "Access badge output",
     "Submit claim",
-    "Fetch access badge",
   ]);
 });
 

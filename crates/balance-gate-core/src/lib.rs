@@ -7,13 +7,15 @@ use ed25519_dalek::{Signature, Verifier as _, VerifyingKey};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
-pub const GATE_STATE_VERSION: u16 = 2;
+pub const GATE_STATE_VERSION: u16 = 3;
 pub const ACCESS_BADGE_VERSION: u16 = 1;
 pub const ON_CHAIN_CHALLENGE_VERSION: u16 = 1;
 pub const ON_CHAIN_CHALLENGE_DOMAIN: &[u8] = b"LEZ-TokenStudio/OnChainChallenge/v1";
 pub const ON_CHAIN_PRESENTATION_DOMAIN: &[u8] = b"LEZ-TokenStudio/OnChainPresentation/v1";
 pub const ON_CHAIN_NONCE_DOMAIN: &[u8] = b"LEZ-TokenStudio/OnChainNonce/v1";
-pub const MAX_ON_CHAIN_PROOF_AGE_MS: u64 = 10 * 60 * 1_000;
+pub const DEFAULT_ON_CHAIN_PROOF_AGE_MS: u64 = 10 * 60 * 1_000;
+pub const MIN_ON_CHAIN_PROOF_AGE_MS: u64 = 60 * 1_000;
+pub const MAX_ON_CHAIN_PROOF_AGE_MS: u64 = 24 * 60 * 60 * 1_000;
 pub const MAX_ON_CHAIN_CLOCK_SKEW_MS: u64 = 30_000;
 
 pub type ProgramId = [u32; 8];
@@ -80,6 +82,7 @@ pub struct GateState {
     pub threshold: u128,
     pub commitment_root: [u8; 32],
     pub expires_at_unix_ms: Option<u64>,
+    pub max_proof_age_ms: u64,
     pub challenge_nonce: [u8; 32],
     pub claim_counter: u64,
 }
@@ -91,6 +94,21 @@ impl GateState {
         commitment_root: Digest32,
         challenge_nonce: Digest32,
     ) -> Self {
+        Self::new_with_max_proof_age(
+            context,
+            commitment_root,
+            challenge_nonce,
+            DEFAULT_ON_CHAIN_PROOF_AGE_MS,
+        )
+    }
+
+    #[must_use]
+    pub fn new_with_max_proof_age(
+        context: &GateContext,
+        commitment_root: Digest32,
+        challenge_nonce: Digest32,
+        max_proof_age_ms: u64,
+    ) -> Self {
         Self::from_public_inputs(
             context.context_hash(),
             context.token_program_owner,
@@ -98,11 +116,13 @@ impl GateState {
             context.threshold,
             commitment_root,
             context.expires_at_unix_ms,
+            max_proof_age_ms,
             challenge_nonce,
         )
     }
 
     #[must_use]
+    #[allow(clippy::too_many_arguments)]
     pub const fn from_public_inputs(
         context_hash: [u8; 32],
         token_program_owner: [u32; 8],
@@ -110,6 +130,7 @@ impl GateState {
         threshold: u128,
         commitment_root: [u8; 32],
         expires_at_unix_ms: Option<u64>,
+        max_proof_age_ms: u64,
         challenge_nonce: [u8; 32],
     ) -> Self {
         Self {
@@ -120,6 +141,7 @@ impl GateState {
             threshold,
             commitment_root,
             expires_at_unix_ms,
+            max_proof_age_ms,
             challenge_nonce,
             claim_counter: 0,
         }
@@ -130,6 +152,8 @@ impl GateState {
             || self.threshold == 0
             || self.commitment_root == [0; 32]
             || self.challenge_nonce == [0; 32]
+            || !(MIN_ON_CHAIN_PROOF_AGE_MS..=MAX_ON_CHAIN_PROOF_AGE_MS)
+                .contains(&self.max_proof_age_ms)
         {
             return Err(ClaimError::InvalidGateState);
         }
@@ -190,6 +214,7 @@ pub enum GateInstruction {
         threshold: u128,
         commitment_root: [u8; 32],
         expires_at_unix_ms: u64,
+        max_proof_age_ms: u64,
         challenge_nonce: [u8; 32],
     },
     Claim {
@@ -526,5 +551,26 @@ mod tests {
             decode_gate_state(&encode_gate_state(&state).unwrap()).unwrap(),
             state
         );
+    }
+
+    #[test]
+    fn proof_age_policy_is_explicit_and_bounded() {
+        let default_state = GateState::new(&context(), [8; 32], [5; 32]);
+        assert_eq!(
+            default_state.max_proof_age_ms,
+            DEFAULT_ON_CHAIN_PROOF_AGE_MS
+        );
+
+        let custom_state =
+            GateState::new_with_max_proof_age(&context(), [8; 32], [5; 32], 6 * 60 * 60 * 1_000);
+        assert!(custom_state.validate().is_ok());
+
+        let mut too_short = custom_state.clone();
+        too_short.max_proof_age_ms = MIN_ON_CHAIN_PROOF_AGE_MS - 1;
+        assert_eq!(too_short.validate(), Err(ClaimError::InvalidGateState));
+
+        let mut too_long = custom_state;
+        too_long.max_proof_age_ms = MAX_ON_CHAIN_PROOF_AGE_MS + 1;
+        assert_eq!(too_long.validate(), Err(ClaimError::InvalidGateState));
     }
 }

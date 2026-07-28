@@ -22,6 +22,15 @@ cleanup() {
 }
 trap cleanup EXIT
 
+if curl --fail --silent \
+  --header "content-type: application/json" \
+  --data '{"jsonrpc":"2.0","id":1,"method":"checkHealth","params":[]}' \
+  "$SEQUENCER_URL" >/dev/null 2>&1; then
+  printf 'refusing to start: a healthy service already owns %s\n' \
+    "$SEQUENCER_URL" >&2
+  exit 1
+fi
+
 (
   cd "$RUN_DIR"
   exec "$SEQUENCER_BIN" "$SEQUENCER_CONFIG" \
@@ -40,7 +49,7 @@ for _ in $(seq 1 120); do
   fi
   sleep 0.5
 done
-if [[ "$healthy" -ne 1 ]]; then
+if [[ "$healthy" -ne 1 ]] || ! kill -0 "$SEQUENCER_PID" 2>/dev/null; then
   printf '%s\n' "standalone sequencer did not become healthy" >&2
   cat "$RUN_DIR/sequencer.log" >&2
   exit 1
@@ -106,7 +115,7 @@ wait_for_transaction "$INITIALIZATION_TX"
   --gate-account-id-hex "$GATE_ACCOUNT_ID" \
   --output "$RUN_DIR/fetched-gate-state.json"
 
-test "$(jq -r '.version' "$RUN_DIR/fetched-gate-state.json")" = "2"
+test "$(jq -r '.version' "$RUN_DIR/fetched-gate-state.json")" = "3"
 test "$(jq -r '.claim_counter' "$RUN_DIR/fetched-gate-state.json")" = "0"
 test "$(jq -c '.commitment_root' "$RUN_DIR/fetched-gate-state.json")" = \
   "$(jq -c '.commitment_root' "$RUN_DIR/gate-state.json")"

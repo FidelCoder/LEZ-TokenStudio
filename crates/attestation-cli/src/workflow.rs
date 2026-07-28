@@ -28,21 +28,24 @@ use jsonrpsee::{core::client::ClientT as _, http_client::HttpClientBuilder, rpc_
 use lee::{AccountId, PrivateKey};
 use lee_core::{
     account::{Account, AccountWithMetadata},
+    encryption::ViewingPublicKey,
     program::DEFAULT_PROGRAM_ID,
     InputAccountIdentity,
 };
 use lez_gate_sdk::{
     compose_demo_gate_execution, compose_private_execution, gate_deployment_transaction,
-    gate_initialization_transaction, prove_demo_gate_claim, prove_gate_claim,
-    signed_gate_claim_transaction, signer_account_id, simulate_demo_claim, SimulatedGateClaim,
+    gate_initialization_transaction, private_badge_identity, private_gate_claim_transaction,
+    prove_demo_gate_claim, prove_gate_claim, signer_account_id, simulate_demo_claim,
+    PrivateBadgeIdentity, SimulatedGateClaim,
 };
 use proofgate_messaging::bind_admission_challenge;
-use rand::rngs::OsRng;
+use rand::{rngs::OsRng, RngCore as _};
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use tokenstudio_config::read_gate_config;
 
 const PRESENTER_KEY_VERSION: u16 = 1;
 const LEZ_ACCOUNT_KEY_VERSION: u16 = 1;
+const LEZ_PRIVATE_ACCOUNT_KEY_VERSION: u16 = 1;
 const REPLAY_CACHE_VERSION: u16 = 1;
 const LEZ_TX_PUBLIC_TAG: u8 = 0;
 const LEZ_TX_PRIVATE_TAG: u8 = 1;
@@ -92,6 +95,63 @@ impl LezAccountKeyFile {
     }
 }
 
+#[derive(Debug, Serialize, Deserialize)]
+struct LezPrivateAccountKeyFile {
+    version: u16,
+    #[serde(with = "serde_digest_hex")]
+    nullifier_secret_key: Digest32,
+    #[serde(with = "serde_digest_hex")]
+    viewing_secret_d: Digest32,
+    #[serde(with = "serde_digest_hex")]
+    viewing_secret_z: Digest32,
+    identifier: u128,
+    account_id: String,
+}
+
+impl LezPrivateAccountKeyFile {
+    fn generate() -> Self {
+        let mut nullifier_secret_key = [0_u8; 32];
+        let mut viewing_secret_d = [0_u8; 32];
+        let mut viewing_secret_z = [0_u8; 32];
+        OsRng.fill_bytes(&mut nullifier_secret_key);
+        OsRng.fill_bytes(&mut viewing_secret_d);
+        OsRng.fill_bytes(&mut viewing_secret_z);
+        let identifier = 0;
+        let viewing_public_key = ViewingPublicKey::from_seed(&viewing_secret_d, &viewing_secret_z);
+        let account_id =
+            private_badge_identity(nullifier_secret_key, &viewing_public_key, identifier)
+                .account_id;
+        Self {
+            version: LEZ_PRIVATE_ACCOUNT_KEY_VERSION,
+            nullifier_secret_key,
+            viewing_secret_d,
+            viewing_secret_z,
+            identifier,
+            account_id: account_id.to_string(),
+        }
+    }
+
+    fn identity(&self) -> Result<PrivateBadgeIdentity, String> {
+        if self.version != LEZ_PRIVATE_ACCOUNT_KEY_VERSION {
+            return Err(format!(
+                "unsupported LEZ private account key version {}; expected {LEZ_PRIVATE_ACCOUNT_KEY_VERSION}",
+                self.version
+            ));
+        }
+        let viewing_public_key =
+            ViewingPublicKey::from_seed(&self.viewing_secret_d, &self.viewing_secret_z);
+        let identity = private_badge_identity(
+            self.nullifier_secret_key,
+            &viewing_public_key,
+            self.identifier,
+        );
+        if identity.account_id.to_string() != self.account_id {
+            return Err("LEZ private account key file has a mismatched account ID".to_owned());
+        }
+        Ok(identity)
+    }
+}
+
 impl PresenterKeyFile {
     fn generate() -> Self {
         let signing_key = SigningKey::generate(&mut OsRng);
@@ -131,16 +191,30 @@ pub struct VerifyOutcome {
 pub struct ComposedOnChainOutcome {
     pub proof_bytes: usize,
     pub public_post_states: usize,
+    pub encrypted_private_post_states: usize,
     pub private_commitments: usize,
     pub nullifiers: usize,
     pub gate_proving_ms: u128,
     pub outer_proving_ms: u128,
     pub total_proving_ms: u128,
+    pub gate_total_cycles: u64,
+    pub gate_user_cycles: u64,
+    pub gate_paging_cycles: u64,
+    pub gate_segments: usize,
+    pub outer_total_cycles: u64,
+    pub outer_user_cycles: u64,
+    pub outer_paging_cycles: u64,
+    pub outer_segments: usize,
 }
 
 pub struct SubmittedOnChainClaim {
     pub transaction_hash: String,
     pub composition: ComposedOnChainOutcome,
+}
+
+pub struct ClaimOutputPaths<'path> {
+    pub badge: &'path Path,
+    pub proof: &'path Path,
 }
 
 #[must_use]
@@ -159,6 +233,17 @@ pub fn generate_lez_account_key(output: &Path) -> Result<AccountId, String> {
 pub fn lez_account_id(path: &Path) -> Result<AccountId, String> {
     let key = read_lez_account_key(path)?;
     Ok(signer_account_id(&key.private_key()?))
+}
+
+pub fn generate_lez_private_account_key(output: &Path) -> Result<AccountId, String> {
+    let key = LezPrivateAccountKeyFile::generate();
+    let account_id = key.identity()?.account_id;
+    write_private_json_new(output, &key)?;
+    Ok(account_id)
+}
+
+pub fn lez_private_account_id(path: &Path) -> Result<AccountId, String> {
+    Ok(read_lez_private_account_key(path)?.identity()?.account_id)
 }
 
 pub async fn deploy_balance_gate(sequencer_url: &str) -> Result<String, String> {
@@ -224,7 +309,7 @@ pub async fn submit_on_chain_claim(
     claim_path: &Path,
     gate_account_id: Digest32,
     badge_key_path: &Path,
-    output_proof: &Path,
+    output: ClaimOutputPaths<'_>,
 ) -> Result<SubmittedOnChainClaim, String> {
     let proof = read_proof(proof_path).map_err(input_message)?;
     let expected_state: GateState = read_json(state_path)?;
@@ -239,25 +324,28 @@ pub async fn submit_on_chain_claim(
         );
     }
 
-    let badge_key = read_lez_account_key(badge_key_path)?.private_key()?;
-    let badge_account_id = signer_account_id(&badge_key);
-    let badge_account = fetch_public_account(sequencer_url, badge_account_id).await?;
-    if badge_account.program_owner != DEFAULT_PROGRAM_ID || !badge_account.data.as_ref().is_empty()
-    {
-        return Err(format!(
-            "badge account {badge_account_id} is already initialized"
-        ));
-    }
-
+    let badge_identity = read_lez_private_account_key(badge_key_path)?.identity()?;
+    let badge_account_id = badge_identity.account_id;
     let pre_states = vec![
-        AccountWithMetadata::new(gate_account.clone(), false, gate_account_id),
-        AccountWithMetadata::new(badge_account.clone(), true, badge_account_id),
+        AccountWithMetadata::new(gate_account, false, gate_account_id),
+        AccountWithMetadata::new(Account::default(), true, badge_account_id),
     ];
     let total_started = Instant::now();
     eprintln!("Composition phase 1/2: proving the balance-gate program receipt");
     let phase_started = Instant::now();
     let gate_execution =
         prove_gate_claim(pre_states, claim, &proof).map_err(|error| error.to_string())?;
+    let badge = decode_access_badge(
+        gate_execution
+            .output
+            .post_states
+            .get(1)
+            .ok_or_else(|| "gate execution did not return an access badge".to_owned())?
+            .account()
+            .data
+            .as_ref(),
+    )
+    .map_err(|error| format!("gate execution returned an invalid access badge: {error}"))?;
     let gate_proving_ms = phase_started.elapsed().as_millis();
     eprintln!("Composition phase 1/2 complete in {gate_proving_ms} ms");
 
@@ -265,7 +353,10 @@ pub async fn submit_on_chain_claim(
     let phase_started = Instant::now();
     let composed = compose_private_execution(
         gate_execution,
-        vec![InputAccountIdentity::Public, InputAccountIdentity::Public],
+        vec![
+            InputAccountIdentity::Public,
+            badge_identity.circuit_identity,
+        ],
     )
     .map_err(|error| error.to_string())?;
     let outer_proving_ms = phase_started.elapsed().as_millis();
@@ -275,19 +366,27 @@ pub async fn submit_on_chain_claim(
     let public_post_states = composed.circuit_output.public_post_states.len();
     let private_commitments = composed.circuit_output.new_commitments.len();
     let nullifiers = composed.circuit_output.new_nullifiers.len();
+    let encrypted_private_post_states = composed.circuit_output.encrypted_private_post_states.len();
+    if public_post_states != 1
+        || private_commitments != 1
+        || nullifiers != 1
+        || encrypted_private_post_states != 1
+    {
+        return Err(format!(
+            "invalid private badge transaction shape: {public_post_states} public post states, \
+             {private_commitments} commitments, {nullifiers} nullifiers, and \
+             {encrypted_private_post_states} encrypted private post states",
+        ));
+    }
+    write_private_json(output.badge, &badge)?;
     let proof_bytes = composed.proof.clone().into_inner();
-    create_parent(output_proof)?;
-    fs::write(output_proof, &proof_bytes)
-        .map_err(|error| format!("failed to write {}: {error}", output_proof.display()))?;
-    let transaction = signed_gate_claim_transaction(
-        composed,
-        gate_account_id,
-        gate_account.nonce,
-        badge_account_id,
-        badge_account.nonce,
-        &badge_key,
-    )
-    .map_err(|error| error.to_string())?;
+    let gate_stats = composed.gate_stats.clone();
+    let outer_stats = composed.outer_stats.clone();
+    create_parent(output.proof)?;
+    fs::write(output.proof, &proof_bytes)
+        .map_err(|error| format!("failed to write {}: {error}", output.proof.display()))?;
+    let transaction = private_gate_claim_transaction(composed, gate_account_id)
+        .map_err(|error| error.to_string())?;
     let transaction_hash =
         send_lez_transaction(sequencer_url, LEZ_TX_PRIVATE_TAG, &transaction).await?;
 
@@ -296,11 +395,20 @@ pub async fn submit_on_chain_claim(
         composition: ComposedOnChainOutcome {
             proof_bytes: proof_bytes.len(),
             public_post_states,
+            encrypted_private_post_states,
             private_commitments,
             nullifiers,
             gate_proving_ms,
             outer_proving_ms,
             total_proving_ms,
+            gate_total_cycles: gate_stats.total_cycles,
+            gate_user_cycles: gate_stats.user_cycles,
+            gate_paging_cycles: gate_stats.paging_cycles,
+            gate_segments: gate_stats.segments,
+            outer_total_cycles: outer_stats.total_cycles,
+            outer_user_cycles: outer_stats.user_cycles,
+            outer_paging_cycles: outer_stats.paging_cycles,
+            outer_segments: outer_stats.segments,
         },
     })
 }
@@ -309,10 +417,16 @@ pub fn initialize_on_chain_state(
     gate_path: &Path,
     commitment_root: Digest32,
     challenge_nonce: Digest32,
+    max_proof_age_ms: u64,
     output: &Path,
 ) -> Result<GateState, String> {
     let gate = read_gate_config(gate_path).map_err(|error| error.to_string())?;
-    let state = GateState::new(&gate.context, commitment_root, challenge_nonce);
+    let state = GateState::new_with_max_proof_age(
+        &gate.context,
+        commitment_root,
+        challenge_nonce,
+        max_proof_age_ms,
+    );
     state.validate().map_err(|error| error.to_string())?;
     write_json(output, &state)?;
     Ok(state)
@@ -375,30 +489,59 @@ pub fn compose_on_chain_claim(
     state_path: &Path,
     claim_path: &Path,
     gate_account_id: Digest32,
-    badge_account_id: Digest32,
+    badge_key_path: &Path,
+    output_badge: &Path,
     output: &Path,
 ) -> Result<ComposedOnChainOutcome, String> {
     let proof = read_proof(proof_path).map_err(input_message)?;
     let state: GateState = read_json(state_path)?;
     let claim: ClaimAccess = read_json(claim_path)?;
+    let badge_identity = read_lez_private_account_key(badge_key_path)?.identity()?;
+    let badge_account_id = badge_identity.account_id.into_value();
     let total_started = Instant::now();
     eprintln!("Composition phase 1/2: proving the balance-gate program receipt");
     let phase_started = Instant::now();
     let gate_execution =
         prove_demo_gate_claim(&state, gate_account_id, badge_account_id, claim, &proof)
             .map_err(|error| error.to_string())?;
+    let badge = decode_access_badge(
+        gate_execution
+            .output
+            .post_states
+            .get(1)
+            .ok_or_else(|| "gate execution did not return an access badge".to_owned())?
+            .account()
+            .data
+            .as_ref(),
+    )
+    .map_err(|error| format!("gate execution returned an invalid access badge: {error}"))?;
     let gate_proving_ms = phase_started.elapsed().as_millis();
     eprintln!("Composition phase 1/2 complete in {gate_proving_ms} ms");
     eprintln!("Composition phase 2/2: proving the official LEZ PPE receipt");
     let phase_started = Instant::now();
-    let composed =
-        compose_demo_gate_execution(gate_execution).map_err(|error| error.to_string())?;
+    let composed = compose_demo_gate_execution(gate_execution, badge_identity.circuit_identity)
+        .map_err(|error| error.to_string())?;
     let outer_proving_ms = phase_started.elapsed().as_millis();
     let total_proving_ms = total_started.elapsed().as_millis();
     eprintln!("Composition phase 2/2 complete in {outer_proving_ms} ms");
     let public_post_states = composed.circuit_output.public_post_states.len();
     let private_commitments = composed.circuit_output.new_commitments.len();
     let nullifiers = composed.circuit_output.new_nullifiers.len();
+    let encrypted_private_post_states = composed.circuit_output.encrypted_private_post_states.len();
+    if public_post_states != 1
+        || private_commitments != 1
+        || nullifiers != 1
+        || encrypted_private_post_states != 1
+    {
+        return Err(format!(
+            "invalid private badge transaction shape: {public_post_states} public post states, \
+             {private_commitments} commitments, {nullifiers} nullifiers, and \
+             {encrypted_private_post_states} encrypted private post states",
+        ));
+    }
+    write_private_json(output_badge, &badge)?;
+    let gate_stats = composed.gate_stats;
+    let outer_stats = composed.outer_stats;
     let proof_bytes = composed.proof.into_inner();
     create_parent(output)?;
     fs::write(output, &proof_bytes)
@@ -406,11 +549,20 @@ pub fn compose_on_chain_claim(
     Ok(ComposedOnChainOutcome {
         proof_bytes: proof_bytes.len(),
         public_post_states,
+        encrypted_private_post_states,
         private_commitments,
         nullifiers,
         gate_proving_ms,
         outer_proving_ms,
         total_proving_ms,
+        gate_total_cycles: gate_stats.total_cycles,
+        gate_user_cycles: gate_stats.user_cycles,
+        gate_paging_cycles: gate_stats.paging_cycles,
+        gate_segments: gate_stats.segments,
+        outer_total_cycles: outer_stats.total_cycles,
+        outer_user_cycles: outer_stats.user_cycles,
+        outer_paging_cycles: outer_stats.paging_cycles,
+        outer_segments: outer_stats.segments,
     })
 }
 
@@ -587,6 +739,11 @@ fn read_lez_account_key(path: &Path) -> Result<LezAccountKeyFile, String> {
     read_json(path)
 }
 
+fn read_lez_private_account_key(path: &Path) -> Result<LezPrivateAccountKeyFile, String> {
+    ensure_private_file(path, "LEZ private account key")?;
+    read_json(path)
+}
+
 fn ensure_private_file(path: &Path, label: &str) -> Result<(), String> {
     #[cfg(unix)]
     {
@@ -729,6 +886,37 @@ fn write_json<T: Serialize>(path: &Path, value: &T) -> Result<(), String> {
         .map_err(|error| format!("failed to finish {}: {error}", path.display()))
 }
 
+fn write_private_json<T: Serialize>(path: &Path, value: &T) -> Result<(), String> {
+    create_parent(path)?;
+    let mut options = OpenOptions::new();
+    options.write(true).create(true).truncate(true);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::OpenOptionsExt as _;
+        options.mode(0o600);
+    }
+    let mut file = options
+        .open(path)
+        .map_err(|error| format!("failed to create {}: {error}", path.display()))?;
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt as _;
+        file.set_permissions(fs::Permissions::from_mode(0o600))
+            .map_err(|error| {
+                format!(
+                    "failed to restrict permissions on {}: {error}",
+                    path.display()
+                )
+            })?;
+    }
+    serde_json::to_writer_pretty(&mut file, value)
+        .map_err(|error| format!("failed to serialize {}: {error}", path.display()))?;
+    file.write_all(b"\n")
+        .map_err(|error| format!("failed to finish {}: {error}", path.display()))?;
+    file.sync_all()
+        .map_err(|error| format!("failed to sync {}: {error}", path.display()))
+}
+
 fn write_private_json_new<T: Serialize>(path: &Path, value: &T) -> Result<(), String> {
     create_parent(path)?;
     let mut options = OpenOptions::new();
@@ -822,6 +1010,51 @@ mod tests {
                 0o600
             );
         }
+        fs::remove_file(path).unwrap();
+    }
+
+    #[test]
+    fn generated_private_account_key_round_trips_with_restricted_permissions() {
+        let path = temporary_path("lez-private-account-key");
+        let account_id = generate_lez_private_account_key(&path).unwrap();
+
+        assert_eq!(lez_private_account_id(&path).unwrap(), account_id);
+        assert!(generate_lez_private_account_key(&path).is_err());
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt as _;
+            assert_eq!(
+                fs::metadata(&path).unwrap().permissions().mode() & 0o777,
+                0o600
+            );
+        }
+        fs::remove_file(path).unwrap();
+    }
+
+    #[test]
+    fn private_json_output_is_restricted_even_when_replacing_a_public_file() {
+        let path = temporary_path("private-json-output");
+        fs::write(&path, b"old").unwrap();
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt as _;
+            fs::set_permissions(&path, fs::Permissions::from_mode(0o644)).unwrap();
+        }
+
+        write_private_json(&path, &serde_json::json!({"claim_number": 1})).unwrap();
+
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt as _;
+            assert_eq!(
+                fs::metadata(&path).unwrap().permissions().mode() & 0o777,
+                0o600
+            );
+        }
+        assert_eq!(
+            serde_json::from_slice::<serde_json::Value>(&fs::read(&path).unwrap()).unwrap(),
+            serde_json::json!({"claim_number": 1})
+        );
         fs::remove_file(path).unwrap();
     }
 

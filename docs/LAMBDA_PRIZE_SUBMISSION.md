@@ -52,7 +52,7 @@ The official validation workflow checks:
 - If the prize requires a demo script, the linked repo has `demo.sh` or
   `demo.bash`.
 - If the prize requires SPEL/IDL, the linked repo has `.idl` or `.idl.json`.
-- If the prize requires video, the solution file links a video.
+- The solution file links the mandatory narrated video.
 - If the prize references a Basecamp mini-app, the repo should include
   `module.json`.
 - If the prize references Messaging/Waku/Chat, the source should reference
@@ -134,10 +134,14 @@ Solution: LP-0005 — TokenStudio ProofGate
 - Demo runs against local sequencer with `RISC0_DEV_MODE=0`.
 - Risc0 proof generation visible in terminal output.
 - On-chain verifier path demonstrated.
+- Verifier program ID and transactions verified on public LEZ testnet.
+- Private claim demonstrated against the public testnet gate.
 - Off-chain Logos Messaging path demonstrated.
 - Basecamp module present and documented.
 - SPEL IDL present.
 - Benchmarks include proof generation time and on-chain cost.
+- Three distinct testnet applications are evidenced.
+- At least one application is authored by a party outside the submitting team.
 - Narrated video linked in `solutions/LP-0005.md`.
 - FURPS self-assessment complete.
 - Terms acknowledged.

@@ -3,7 +3,6 @@
 use balance_gate_core::{
     decode_gate_state, encode_access_badge, encode_gate_state, evaluate_claim, ClaimAccess,
     ClaimError, GateState, BALANCE_ATTESTATION_IMAGE_ID, MAX_ON_CHAIN_CLOCK_SKEW_MS,
-    MAX_ON_CHAIN_PROOF_AGE_MS,
 };
 use nssa_core::{
     account::AccountWithMetadata,
@@ -29,6 +28,7 @@ mod balance_gate {
         threshold: u128,
         commitment_root: [u8; 32],
         expires_at_unix_ms: u64,
+        max_proof_age_ms: u64,
         challenge_nonce: [u8; 32],
     ) -> SpelResult {
         let state = GateState::from_public_inputs(
@@ -38,6 +38,7 @@ mod balance_gate {
             threshold,
             commitment_root,
             (expires_at_unix_ms != 0).then_some(expires_at_unix_ms),
+            max_proof_age_ms,
             challenge_nonce,
         );
         state.validate().unwrap_or_else(|error| fail_claim(error));
@@ -93,7 +94,7 @@ mod balance_gate {
         let freshness_end = claim
             .journal
             .issued_at_unix_ms
-            .checked_add(MAX_ON_CHAIN_PROOF_AGE_MS)
+            .checked_add(state.max_proof_age_ms)
             .and_then(|value| value.checked_add(1))
             .unwrap_or_else(|| fail(1005, "proof validity overflows"));
         let valid_until = claim

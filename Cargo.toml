@@ -6,6 +6,7 @@ members = [
   "crates/balance-gate-core",
   "crates/lez-gate-sdk",
   "crates/proofgate-messaging",
+  "crates/proofgate-governance",
   "guests/balance-attestation",
   "programs/balance-gate",
   "crates/attestation-cli",
@@ -36,6 +37,7 @@ balance-gate-core = { path = "crates/balance-gate-core" }
 balance-gate-methods = { path = "programs/balance-gate" }
 lez-gate-sdk = { path = "crates/lez-gate-sdk" }
 proofgate-messaging = { path = "crates/proofgate-messaging" }
+proofgate-governance = { path = "crates/proofgate-governance" }
 balance-attestation-methods = { path = "guests/balance-attestation" }
 attestation-circuit = { path = "crates/attestation-circuit" }
 lez-compat = { path = "crates/lez-compat" }

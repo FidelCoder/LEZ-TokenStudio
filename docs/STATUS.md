@@ -1,85 +1,108 @@
 # Implementation Status
 
-## Implemented And Locally Validated
+## Current Position
 
-- Token select/create/mint configuration and wallet command adapters.
-- Deterministic, asset-specific gate configuration.
-- Exact LEZ account commitment, token data, and Merkle semantics.
-- Risc0 guest checks for membership, token, threshold, and context.
-- Real `RISC0_DEV_MODE=0` succinct balance proof generation and verification.
-- Wallet snapshot parsing and current/`v0.2.0` sequencer membership-proof
-  acquisition.
-- Independent sequencer-root acquisition, VerificationChallenge v2 root
-  binding, fresh challenges, Ed25519 presenter binding, deterministic denials,
-  exact retained-challenge matching, replay cache locking, and malicious
-  prover-selected-root/challenge rejection tests.
-- Actual SPEL gate guest, account constraints, nonce rotation, access badge,
-  recursive receipt assumption, generated IDL, and conditional execution tests.
-- Official LEZ PPE composition code with real-mode guard and phase timing.
-- Canonical LEZ deployment/public/private transaction packaging, restricted
-  gate and badge signer files, stale-state rejection, and sequencer
-  `getAccount`/`sendTransaction` command paths.
-- Exact LEZ `v0.2.0` standalone node build and health check, live legacy
-  membership-proof RPC, root-bound gate deployment, included GateState v2
-  initialization, and authoritative root/state fetch/decode.
-- Reproducible `scripts/ci-standalone-lez.sh` lifecycle plus a GitHub Actions
-  job that builds the pinned node and exercises membership, deployment,
-  inclusion, and root-bound initialization.
-- Rejection of an uninitialized account by authoritative `fetch-badge`.
-- Receipt-sized Messaging chunk/reassembly tests and official `logoscore`
-  `chat_module` adapter.
-- Sender- and challenge-bound GroupV2 admission workflow.
-- Official two-daemon Chat doctest with 20 passing steps and a live ProofGate
-  run covering encrypted challenge/proof delivery, real receipt verification,
-  GroupV2 roster admission, forwarding denial, and replay denial for the prior
-  challenge revision.
-- Basecamp universal `ui_qml` source for token, gate, prove, verify, Messaging,
-  and on-chain operations, including verifier-owned sequencer-root controls.
-- A prior UI revision completed reproducible LGX packaging and four official
-  Logos Qt integration tests, including a non-empty desktop render.
-- Local CI entry point covering shell syntax, JSON, generated IDL equality,
-  format, strict Clippy, and all workspace tests.
+All repository-owned technical paths are implemented and validated without
+depending on GitHub Actions. A real `RISC0_DEV_MODE=0` private claim is now
+included on the official LEZ testnet. The repository is not yet ready for an
+LP-0005 submission because the official criteria still require supported
+network CU evidence, outside-party adoption, green default-branch CI, and a
+narrated video.
 
-## External Validation Required Before Submission
+## Completed Technical Work
 
-- Complete a fresh recursive proof through `claim-submit` and confirm claim
-  inclusion, badge creation, state rotation, and replay rejection before the
-  10-minute timestamp window expires. Commodity CPU timing requires an
-  accelerated prover in this environment.
-- Install the built Basecamp `.lgx` in the full client and capture desktop and
-  narrow-window screenshots. First rebuild and rerun the official integration
-  suite for the current trusted-root control revision.
-- Resolve the GitHub account-level billing lock so the added Actions jobs can
-  start. Local CI is green evidence but does not replace LP-0005's green
-  default-branch CI requirement.
-- Obtain a current LEZ devnet/testnet endpoint, deployment access, and supported
-  compute/cost metric; none is configured in this environment.
-- Rerun the two-daemon Chat admission flow with VerificationChallenge v2 and
-  exact retained-challenge enforcement.
-- Record final proof, PPE, network, and sequencer compute/cost measurements.
-- Record the narrated demo video.
-- Receive owner testing/approval.
-- Open the separate Lambda Prize solution PR. Per project-owner instruction,
-  no Lambda Prize PR has been created.
+- Exact private account commitment and Merkle membership proof.
+- Real `RISC0_DEV_MODE=0` threshold proof generation and verification.
+- Context, authorized-root, fresh-challenge, presenter-key, and replay binding.
+- SPEL on-chain verifier with GateState v3 and encrypted private access badge.
+- Canonical LEZ private transaction composition and inclusion checks.
+- Encrypted Logos Chat transport and sender-bound GroupV2 admission.
+- Proposal-bound private governance integration with persistent challenges and
+  one-pseudonym-one-vote enforcement.
+- Basecamp GUI, downloadable LGX, official Qt tests, CLI/SDK, IDL, and local
+  reproducible runners.
+- Read-only public-testnet evidence collector with transaction inclusion,
+  GateState version/counter assertions, and SHA-256 manifests.
 
-## Evidence Commands
+## Verified Public Testnet
+
+On 2026-07-28 the official `https://testnet.lez.logos.co` sequencer included:
+
+- program ID
+  `a2daba934bd6993d8c673c363ca75a24733780f26341b1b95e3d1bd81bf634aa`;
+- deployment transaction
+  `7a3b9b1e61bcb1d1559937e07fadcabee9965b50a44d9e1f82b55d1a3fd535a1`;
+- private-token transaction
+  `70740bfb7b701f41a7e5c99921114194ac865986e4860193f35e50a260bd0c0a`;
+- proof-root-bound GateState v3 account
+  `4f7b5ec8898c8509b4b18f39c646a838d37b6c00e7ffe251c410b91645640eb0`;
+- initialization transaction
+  `5a4f7b7e5ceccadfd46d42f841dfff75d28b14458ea7a796cff6c0e52f164978`;
+- private claim transaction
+  `8f34ef536703cb5f3b2401d789dcdcbf3a0f28b4b6be1ebf6a6711c62a1ef1de`.
+
+The fetched final state is GateState v3 with `claim_counter = 1`; the nonce
+rotated, badge context/presenter/timestamp bindings matched, and stale replay
+was denied before recomposition. The checksummed public bundle is
+`artifacts/testnet-claim-current`. Wallet storage, account snapshots, presenter
+keys, badge keys, and the holder-local badge are excluded.
+
+The live recursive claim took 5,783,248 ms: 3,866,660 ms for the gate proof and
+1,916,587 ms for the official PPE proof. It used 3,670,016 gate guest cycles and
+1,048,576 PPE guest cycles, with a 223,970-byte balance receipt and a
+230,611-byte PPE proof.
+
+## Final Local Evidence
+
+The exact LEZ v0.2 lifecycle independently includes a real 223,970-byte balance
+receipt, 230,611-byte PPE proof, private claim inclusion, counter `0 -> 1`,
+private badge claim `1`, nonce rotation, stale replay denial, and state
+persistence after node restart. Recursive composition took 5,718,392 ms on the
+recorded unaccelerated machine.
+
+Current Logos Chat evidence reconstructed ten chunks plus one manifest,
+admitted the bound sender to GroupV2, and denied forwarding/replay. The final
+Basecamp package passed all four official Qt tests and rendered a non-empty
+1024 by 768 frame.
+
+## Mandatory Work Before Submission
+
+These items are mandatory official outcomes, not optional polish:
+
+- Document a supported testnet/devnet CU or gas cost for each on-chain
+  operation. The current official RPC returns the serialized transaction and
+  block ID but exposes no CU field, and current LEZ source has no cost-metadata
+  RPC. Local Risc0 cycles must not be mislabeled as network CU.
+- Obtain evidence for three distinct testnet applications with at least one
+  built by a party outside the submitting team. This repository supplies the
+  on-chain access grant, Logos Chat, Basecamp, and governance reference
+  integrations, but team-authored examples cannot satisfy outside provenance.
+- Make CI green on the public repository default branch. Local CI is
+  reproducible evidence but does not replace this explicit hosted status.
+- Record and link the mandatory narrated video showing terminal proof
+  generation with `RISC0_DEV_MODE=0`, both verification paths, architecture,
+  rationale, and key decisions.
+- Owner-review, commit, push, and open the Lambda Prize solution PR.
+
+The official criteria are:
+<https://github.com/logos-co/lambda-prize/blob/master/prizes/LP-0005.md>.
+
+## Reproduction
 
 ```bash
-cargo fmt --all --check
-cargo clippy --workspace --all-targets -- -D warnings
-cargo test --workspace
-cargo build --release -p proofgate
 scripts/ci-local.sh
-scripts/ci-standalone-lez.sh \
+scripts/ci-testnet-evidence.sh \
+  artifacts/testnet-claim-current \
+  4f7b5ec8898c8509b4b18f39c646a838d37b6c00e7ffe251c410b91645640eb0 \
+  5a4f7b7e5ceccadfd46d42f841dfff75d28b14458ea7a796cff6c0e52f164978 \
+  8f34ef536703cb5f3b2401d789dcdcbf3a0f28b4b6be1ebf6a6711c62a1ef1de
+scripts/ci-standalone-claim.sh \
   /path/to/lez-v0.2.0/sequencer_service \
   /path/to/lez-v0.2.0/sequencer_config.json
-cargo test -p proofgate-messaging
-cargo test -p lez-gate-sdk
-RISC0_DEV_MODE=0 cargo test -p attestation-prover \
-  real_succinct_proof_round_trip -- --ignored --nocapture
+scripts/basecamp-local.sh
 ```
 
-See `docs/BENCHMARKS.md` for recorded results and explicit gaps.
-The live runtime transcripts and package hashes are recorded in
-`docs/evidence/LIVE_LOGOS_MESSAGING.md` and
-`docs/evidence/BASECAMP_INTEGRATION.md`.
+See [Public Testnet Evidence](evidence/LIVE_LEZ_TESTNET.md),
+[Benchmarks](BENCHMARKS.md), [External Integrator
+Guide](EXTERNAL_INTEGRATOR_GUIDE.md), and [Offline
+Validation](OFFLINE_VALIDATION.md).

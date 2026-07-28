@@ -8,7 +8,7 @@ governance, or access without an independent review.
 
 Report vulnerabilities through GitHub's private security advisory flow for
 `FidelCoder/LEZ-TokenStudio`. Do not include presenter keys, wallet snapshots,
-or private account data in a public issue.
+private badge keys, or private account data in a public issue.
 
 ## Protected Properties
 
@@ -19,21 +19,23 @@ or private account data in a public issue.
   presenter key committed in the receipt.
 - Replay caches are atomically persisted while holding an exclusive
   cross-process lock.
-- On-chain claims bind program, gate context, badge account, nonce, counter,
-  image ID, and journal; successful claims rotate the nonce.
-- Claim submission refetches sequencer account state, rejects stale gate state,
-  and requires the signer-derived account ID to equal the new badge account.
+- On-chain claims bind program, gate context, private badge account, nonce,
+  counter, image ID, and journal; successful claims rotate the nonce.
+- Claim submission refetches public gate state, rejects stale state, validates
+  that the restricted private badge key derives the claimed account ID, and
+  requires exactly one public update plus one encrypted private output,
+  commitment, and initialization nullifier.
 - Chat admission binds the target GroupV2 ID and member address into the signed
   challenge and requires the encrypted message sender to match that address.
 
 ## Assumptions
 
-- Risc0 receipt verification, SHA-256, Ed25519, Borsh, SPEL, and LEZ account
-  semantics behave as specified by the pinned versions.
+- Risc0 receipt verification, SHA-256, Ed25519, Borsh, SPEL, ML-KEM, and LEZ
+  account semantics behave as specified by the pinned versions.
 - The sequencer supplies an authentic commitment root and membership proof.
 - The wallet snapshot and presenter key are read from a trusted local machine.
-- Gate, badge, and presenter key files remain mode `0600` and are protected
-  from local disclosure.
+- Gate, presenter, and private badge key files remain mode `0600` and are
+  protected from local disclosure.
 - The verifier's clock is accurate enough for challenge and proof freshness.
 - Logos Chat correctly authenticates the `sender` associated with a decrypted
   message.
@@ -47,12 +49,15 @@ or private account data in a public issue.
   context when unlinkability matters.
 - The public journal reveals the token identifiers, threshold, commitment root,
   context hash, presenter public key, issue time, and optional expiry.
-- The 10-minute proof freshness policy requires accelerated or sufficiently
-  fast proving for a live on-chain submission. Slow local composition can
-  produce a valid receipt whose LEZ timestamp window has already elapsed.
-- The CLI adapter trusts the configured `proofgate`, `wallet`, and `logoscore`
-  executable paths. The Basecamp backend invokes ProofGate without a shell but
-  does not sandbox the binary itself.
+- GateState v3 stores a bounded proof-age policy from one minute through 24
+  hours. The default is ten minutes; the unaccelerated local recursive demo
+  uses six hours. Longer windows increase exposure to older authorized roots.
+- The holder's access-badge plaintext is a sensitive local artifact. The
+  sequencer receives only its ciphertext, commitment, and nullifier; inclusion
+  binds that ciphertext but does not provide a plaintext fetch API.
+- The CLI adapter trusts the configured `proofgate`, `wallet`, and
+  `logoscore` executable paths. The Basecamp backend invokes ProofGate without
+  a shell but does not sandbox the binary itself.
 - Group admission is asynchronous. If `add_group_member` fails after the replay
   cache commits, the operator must issue a new challenge and retry.
 - Denial-of-service, side-channel resistance, compromised hosts, malicious

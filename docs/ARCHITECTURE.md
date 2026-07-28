@@ -11,9 +11,9 @@ account data, and Merkle membership semantics. Compatibility vectors pin field
 order and little-endian encoding.
 
 `attestation-circuit` evaluates the private statement shared by host tests and
-the Risc0 guest. `balance-attestation-methods` builds the guest ELF and generated
-image ID. `attestation-image-id` stores the independently checked image ID so
-the guest does not depend on its own generated artifact.
+the Risc0 guest. `balance-attestation-methods` builds the guest ELF and
+generated image ID. `attestation-image-id` stores the independently checked
+image ID so the guest does not depend on its own generated artifact.
 
 `attestation-prover` reads fixture or wallet snapshots, obtains a sequencer
 membership proof through current `getProofsAndRoot` or the pinned `v0.2.0`
@@ -32,8 +32,10 @@ challenge binding, deterministic errors, nonce rotation, and access badges.
 balance receipt and emits a time-bounded LEZ state transition.
 
 `lez-gate-sdk` supplies the balance-gate receipt as an assumption to the
-official LEZ privacy preserving execution guest and returns sequencer-format
-proof bytes, public post states, commitments, and nullifiers.
+official LEZ privacy-preserving execution guest. It constructs an ML-KEM-backed
+private badge identity, encrypts the AccessBadge post-state, and returns
+sequencer-format proof bytes with one public state, one private commitment, and
+one initialization nullifier.
 
 `proofgate-messaging` chunks presentations for the official `chat_module`,
 checks transfer integrity, receives by polling the same API used in Logos
@@ -60,21 +62,24 @@ and member address, and the received Chat sender must equal that member.
 
 ## On-Chain Flow
 
-1. Gate operator reads a root from its trusted sequencer and stores it with the
-   immutable gate policy, rotating nonce, and claim counter.
-2. Holder signs a claim bound to program, gate, badge account, nonce, and
-   counter.
-3. SPEL account constraints authorize the mutable gate and new badge accounts.
-4. Gate logic checks exact public claims and presenter signature.
-5. `env::verify` resolves the balance-attestation receipt assumption.
-6. Program updates gate state, creates `AccessBadge`, and applies a timestamp
-   validity window.
-7. The official LEZ PPE guest recursively consumes the program receipt and
-   creates the final private-execution proof.
-8. The client packages public account IDs, current nonces, post-states, and the
-   proof into the canonical LEZ message.
-9. The new badge account signs that message and the client submits the
-   privacy-preserving transaction through `sendTransaction`.
+1. Gate operator stores a trusted root with immutable gate policy, rotating
+   nonce, bounded proof age, and claim counter in public GateState v3.
+2. Holder creates a restricted private badge identity and signs a claim bound
+   to its derived account ID, the program, gate, nonce, and counter.
+3. SPEL constraints authorize the mutable public gate and the new private badge
+   output; gate logic checks policy and the presenter signature.
+4. `env::verify` resolves the balance-attestation receipt assumption.
+5. The program updates GateState and creates the AccessBadge plaintext with an
+   explicit timestamp validity window.
+6. The official LEZ PPE guest recursively consumes the program receipt,
+   encrypts the private badge, and proves authorization from its nullifier
+   secret key.
+7. The client requires exactly one public post-state, one encrypted private
+   post-state, one commitment, and one initialization nullifier.
+8. It packages the public gate ID and nonce plus those private outputs into the
+   canonical LEZ private transaction and calls `sendTransaction`.
+9. After inclusion, authoritative GateState shows the incremented counter and
+   rotated nonce; replaying the old claim is rejected before reproving.
 
 ## Versioned Boundaries
 
@@ -82,7 +87,7 @@ and member address, and the received Chat sender must equal that member.
 - Attestation journal: version 2
 - Verification challenge: version 2
 - On-chain challenge: version 1
-- Gate state: version 2
+- Gate state: version 3
 - Access badge: version 1
 - Messaging transfer: version 1
 - Risc0: 3.0.5

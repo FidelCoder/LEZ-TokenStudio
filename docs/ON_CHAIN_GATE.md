@@ -57,25 +57,35 @@ the next state.
 On-chain proofs are accepted from 30 seconds before their issue timestamp until
 the earliest of:
 
-- 10 minutes after issue; or
+- the gate account's configured maximum proof age; or
 - the configured gate expiry.
 
 LEZ timestamp validity uses an exclusive upper bound, so the program adds one
-millisecond when representing an inclusive expiry. The 10-minute freshness
-policy is deliberately fixed in the program today. Real local proving can take
-longer on constrained hardware; such a proof remains cryptographically valid
-but must be regenerated before submission to a current sequencer.
+millisecond when representing an inclusive expiry. GateState v3 records this
+policy explicitly. The default is 10 minutes, initialization accepts values
+from 1 minute through 24 hours, and the local CPU demo uses 6 hours because
+recursive composition can take substantially longer than 10 minutes. Operators
+should choose the shortest window their prover can reliably meet; longer
+windows increase exposure to proofs made against older state roots.
 
 ## Program Accounts
 
 `Initialize` consumes one signer account and writes a program-owned
-`GateState`. GateState v2 stores the commitment root chosen by the operator
-from a trusted sequencer. An expiry argument of `0` means no gate expiry.
+`GateState`. GateState v3 stores the commitment root chosen by the operator
+from a trusted sequencer and the bounded maximum proof age. An expiry
+argument of `0` means no gate expiry.
 
 `Claim` consumes:
 
-- a mutable `GateState` account owned by the current program; and
-- a new signer badge account that becomes a program-owned `AccessBadge`.
+- a mutable public `GateState` account owned by the current program; and
+- a new authorized private badge account whose plaintext becomes an
+  `AccessBadge` inside the PPE circuit.
+
+The transaction publishes only the updated gate account. The PPE output
+contains one encrypted private badge, one new commitment, and one account-
+initialization nullifier. Authorization of the badge is proven from its
+nullifier secret key inside the circuit; it is not an Ed25519 public-account
+signature.
 
 The generated SPEL IDL is committed at
 `programs/balance-gate/idl/balance_gate.json`.
@@ -115,8 +125,8 @@ proofgate on-chain fetch-state \
   --gate-account-id-hex <gate-account-id> \
   --output gate-state.json
 
-proofgate on-chain account-generate --output badge-account.json
-proofgate on-chain account-id --key badge-account.json
+proofgate on-chain private-account-generate --output badge-account.json
+proofgate on-chain private-account-id --key badge-account.json
 
 proofgate on-chain challenge \
   --state gate-state.json \
@@ -136,38 +146,34 @@ RISC0_DEV_MODE=0 proofgate on-chain claim-submit \
   --claim claim.json \
   --gate-account-id-hex <gate-account-id> \
   --badge-key badge-account.json \
+  --output-badge access-badge.json \
   --output-lez-proof lez-proof.bin
-
-proofgate on-chain fetch-badge \
-  --sequencer-url http://127.0.0.1:3040 \
-  --badge-account-id-hex <badge-account-id> \
-  --output access-badge.json
 ```
 
-`claim-submit` refetches both public accounts before proving. It rejects a
-gate state that changed after the claim was signed, rejects an initialized
-badge account, recursively verifies the balance receipt, composes the official
-LEZ PPE receipt, builds the canonical LEZ message, signs it with the
-badge-account key, and calls `sendTransaction`. Signer files are created with
-mode `0600` and are never accepted on the command line.
+`claim-submit` refetches the public gate account before proving. It rejects a
+gate state that changed after the claim was signed, validates the restricted
+private badge key, recursively verifies the balance receipt, composes the
+official LEZ PPE receipt, enforces the exact one-public/one-private output
+shape, and calls `sendTransaction`. Key files are created with mode `0600` and
+are never accepted as inline command values.
 
-After inclusion, `fetch-badge` requires the authoritative account to be owned
-by the embedded balance-gate program, decodes the current AccessBadge version,
-and writes its context, presenter key, claim number, and proof issue time as
-JSON. Refetch the gate state as well to observe the incremented counter and
-rotated nonce.
+The private badge plaintext is written to `--output-badge` for its holder; the
+sequencer receives only its ciphertext, commitment, and nullifier. After
+inclusion, refetch the public gate state to observe the incremented counter and
+rotated nonce. Transaction inclusion plus the PPE proof binds that local badge
+artifact to the committed private output.
 
 Against an exact local LEZ `v0.2.0` node, the root-bound embedded program
 deployed as
-`19936a0b1174095ae7c5978d1ee547741b81c01d6432e167c02a8a84fcec9a0d`.
-Its initialization transaction was included and its GateState v2, including
+`a2daba934bd6993d8c673c363ca75a24733780f26341b1b95e3d1bd81bf634aa`.
+Its initialization transaction was included and its GateState v3, including
 the authorized root, was fetched and decoded. Exact transaction evidence is
 recorded in
 [Benchmarks](BENCHMARKS.md).
 
-On-chain proofs have a ten-minute timestamp window. Use an accelerated prover
-for sequencer submission if composition cannot complete inside that window on
-the local CPU.
+On-chain proofs use the maximum age persisted in GateState v3. The CLI
+defaults to ten minutes; the CPU demo explicitly initializes a six-hour window
+so its recursive proof can be submitted without weakening the global default.
 
 ## Offline Execution
 
@@ -183,16 +189,19 @@ RISC0_DEV_MODE=0 proofgate on-chain compose \
   --state gate-state.json \
   --claim claim.json \
   --gate-account-id-hex <gate-account-id> \
-  --badge-account-id-hex <badge-account-id> \
+  --badge-key badge-account.json \
+  --output-badge access-badge.json \
   --output-lez-proof lez-proof.bin
 ```
 
 `simulate` executes the actual SPEL guest with a conditional receipt claim. It
 is useful for fast policy and account-transition testing but does not create a
 cryptographic proof. `compose` requires real Risc0 proving and verifies both
-receipts before writing the LEZ proof bytes. The offline commands accept
-synthetic account IDs for deterministic testing; only `claim-submit` packages
-fresh sequencer state into a signed transaction.
+receipts before writing the LEZ proof bytes. `simulate` accepts synthetic
+account IDs for deterministic testing. `compose` derives the private badge ID
+and encryption material from `--badge-key`;
+`claim-submit` additionally packages fresh sequencer state into a canonical
+privacy-preserving transaction.
 
 Run the complete node-backed demo branch with:
 

@@ -3189,6 +3189,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "proofgate-governance"
+version = "0.1.0"
+dependencies = [
+ "attestation-types",
+ "attestation-verifier",
+ "clap",
+ "fs2",
+ "hex",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.19",
+ "tokenstudio-config",
+]
+
+[[package]]
 name = "proofgate-messaging"
 version = "0.1.0"
 dependencies = [

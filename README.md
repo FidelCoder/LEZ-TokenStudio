@@ -25,8 +25,9 @@ its on-chain and off-chain consumers.
   forwarding rejection.
 - A real SPEL 0.6 `balance_gate` program that recursively verifies the balance
   receipt, rotates its nonce, and creates a time-bounded access badge.
-- Composition through the official LEZ privacy preserving execution guest,
-  canonical message packaging, badge-account signing, and sequencer RPC
+- Composition through the official LEZ privacy-preserving execution guest,
+  canonical private transaction packaging, encrypted badge output, commitment
+  and nullifier creation, private-account authorization, and sequencer RPC
   submission.
 - Chunked, integrity-checked proof transport over official Logos
   `chat_module` calls and sender-bound GroupV2 admission.
@@ -74,6 +75,18 @@ scripts/demo.sh                  End-to-end real-mode demo
 cargo build --release -p proofgate
 scripts/ci-local.sh
 ```
+
+Run the complete Actions-independent submission validation against an exact
+local LEZ v0.2.0 sequencer with:
+
+```bash
+scripts/ci-submission-local.sh \
+  /path/to/sequencer_service \
+  /path/to/sequencer_config.json
+```
+
+See [Offline Submission Validation](docs/OFFLINE_VALIDATION.md) for the evidence
+layout and trust boundaries.
 
 Risc0 tooling 3.0.5 and its guest Rust component are required. The first build
 downloads/compiles a substantial zkVM dependency graph.
@@ -136,9 +149,10 @@ RISC0_DEV_MODE=0 proofgate prove --gate gate.json \
 
 ## Consumers
 
-The on-chain path deploys the embedded program, initializes gate state, creates
-a badge-account-bound claim, executes the actual SPEL guest, recursively
-composes an official LEZ PPE proof, signs the transaction, and submits it to a
+The on-chain path deploys the embedded program, initializes GateState v3,
+creates a private-badge-bound claim, executes the actual SPEL guest, recursively
+composes an official LEZ PPE proof, encrypts the badge into a commitment and
+initialization nullifier, and submits the canonical private transaction to a
 configured sequencer. See [On-Chain Gate](docs/ON_CHAIN_GATE.md).
 
 The off-chain path splits receipt-sized envelopes into bounded Chat messages,
@@ -149,30 +163,53 @@ verifies them locally, binds one sender address to one GroupV2 ID, and invokes
 The Basecamp module source and `.lgx` build instructions are in
 [apps/basecamp-tokenstudio](apps/basecamp-tokenstudio/README.md).
 
+The proposal-bound governance consumer is in
+[crates/proofgate-governance](crates/proofgate-governance) with a complete
+walkthrough in [demos/private-governance](demos/private-governance/README.md).
+
 ## Validation Status
 
-A real succinct balance receipt has been generated and verified locally. The
-SPEL guest executes in LEZ's real guest executor, deterministic failures are
-covered, the current IDL is committed, and the Messaging protocol passes a
-receipt-sized 220 KB fixture. The final gate ELF has also been deployed to an
-exact standalone LEZ `v0.2.0` sequencer; a root-bound initialization
-transaction was included and the resulting program-owned GateState v2 was
-fetched and decoded. A reproducible CI script performs that node lifecycle,
-membership query, deployment, initialization, inclusion, and state check. The
-official two-node Chat doctest passed 20/20, and a fresh real proof completed
-encrypted challenge delivery, 11-message proof transfer, local verification,
-GroupV2 admission, forwarding denial, and replay denial under the prior
-challenge revision. The root-bound v2 network run remains tracked explicitly.
+The complete owned technical path is validated locally without GitHub Actions.
+A real `RISC0_DEV_MODE=0` private claim was included by an exact LEZ v0.2
+sequencer, produced one public gate update plus one encrypted private badge
+state, rejected stale replay, and persisted across restart. Current root-bound
+Logos Chat evidence covers encrypted proof transport, sender-bound GroupV2
+admission, forwarding denial, and replay denial. The Basecamp package passed all
+four official Qt integration tests.
 
-The signed private claim path is implemented and locally unit tested, while a
-fresh recursively composed claim still requires prover acceleration to fit the
-ten-minute validity window. An earlier Basecamp package passed all four official
-Logos Qt integration tests and rendered a non-empty 1024 by 768 view; the
-root-control revision still needs a fresh package run and full-client review.
-Testnet/cost evidence, the narrated video, and owner approval also remain
-external work. They are explicitly tracked in [Implementation
-Status](docs/STATUS.md), not represented as completed evidence. Benchmark
-results and limits are in
+The deterministic `balance_gate` program is also deployed on the official
+`https://testnet.lez.logos.co` sequencer:
+
+- program ID
+  `a2daba934bd6993d8c673c363ca75a24733780f26341b1b95e3d1bd81bf634aa`;
+- deployment transaction
+  `7a3b9b1e61bcb1d1559937e07fadcabee9965b50a44d9e1f82b55d1a3fd535a1`;
+- initialized GateState v3 account
+  `ee8068a772e5b928adfe4dbcc4752bf4ca6e514444b84222d8d8591d6c27c71b`;
+- initialization transaction
+  `f31b9c08215d2ec2d0cfd199db2713ca64ac781ad7640897f139b99db4d6f047`.
+
+A separate proof-root-bound GateState completed the full real private claim:
+
+- gate account
+  `4f7b5ec8898c8509b4b18f39c646a838d37b6c00e7ffe251c410b91645640eb0`;
+- initialization transaction
+  `5a4f7b7e5ceccadfd46d42f841dfff75d28b14458ea7a796cff6c0e52f164978`;
+- private claim transaction
+  `8f34ef536703cb5f3b2401d789dcdcbf3a0f28b4b6be1ebf6a6711c62a1ef1de`;
+- fetched final state: GateState v3, counter `1`, nonce rotated, stale replay
+  denied.
+
+The proposal-bound governance crate supplies another distinct reference
+consumer with persistent issued-challenge, replay, and pseudonymous-vote state.
+
+The repository is not yet submission-ready under the official LP-0005 rubric.
+CU/gas evidence for every on-chain operation, three testnet applications
+including one built by an outside party, green CI on the public default branch,
+and the narrated video are mandatory remaining outcomes. Local CI and cycle
+counts are useful evidence but do not replace those explicit criteria. See
+[Implementation Status](docs/STATUS.md), [Public Testnet
+Evidence](docs/evidence/LIVE_LEZ_TESTNET.md), and
 [Benchmarks](docs/BENCHMARKS.md).
 
 ## Documentation
@@ -189,14 +226,17 @@ results and limits are in
 - [Local LEZ v0.2.0 Evidence](docs/evidence/LOCAL_LEZ_V0_2_0.md)
 - [Live Logos Messaging Evidence](docs/evidence/LIVE_LOGOS_MESSAGING.md)
 - [Official Basecamp Integration Evidence](docs/evidence/BASECAMP_INTEGRATION.md)
+- [Live LEZ Testnet Evidence](docs/evidence/LIVE_LEZ_TESTNET.md)
+- [Offline Submission Validation](docs/OFFLINE_VALIDATION.md)
+- [External Integrator Guide](docs/EXTERNAL_INTEGRATOR_GUIDE.md)
 - [LP-0005 Execution Plan](docs/LP-0005_EXECUTION_PLAN.md)
 - [Submission Playbook](docs/LAMBDA_PRIZE_SUBMISSION.md)
 
 ## Submission Policy
 
-Implementation work is pushed to `FidelCoder/LEZ-TokenStudio:main`; the
-`solution/lp-0005-proofgate` history was merged into that default branch. No
-pull request to the Lambda Prize repository will be created until the owner has
-tested and approved the finished implementation.
+The implementation repository is `FidelCoder/LEZ-TokenStudio` and the target
+default branch is `main`. The completed local changes still require owner
+review, commit, and push. No pull request to the Lambda Prize repository will
+be created until the owner has tested and approved the finished implementation.
 
 Licensed under MIT OR Apache-2.0.

@@ -2,7 +2,7 @@ mod workflow;
 
 use std::{
     path::PathBuf,
-    process,
+    process, thread,
     time::{Duration, SystemTime, UNIX_EPOCH},
 };
 
@@ -15,6 +15,7 @@ use attestation_types::{
     digest_from_hex, digest_to_hex, program_owner_from_hex, program_owner_to_hex, GateContext,
     ProofTransport,
 };
+use balance_gate_core::DEFAULT_ON_CHAIN_PROOF_AGE_MS;
 use clap::{Args, Parser, Subcommand, ValueEnum};
 use proofgate_messaging::{
     admission_challenge_matches, pack_envelope, receive_challenge, receive_envelope,
@@ -27,11 +28,12 @@ use tokenstudio_config::{
 use workflow::{
     balance_gate_program_id, compose_on_chain_claim, create_on_chain_claim, create_presentation,
     current_on_chain_challenge, deploy_balance_gate, fetch_on_chain_badge, fetch_on_chain_state,
-    generate_lez_account_key, generate_presenter_key, initialize_on_chain_state,
-    issue_admission_challenge, issue_challenge, lez_account_id, presenter_public_key,
-    read_presentation, read_verification_challenge, simulate_on_chain_claim, submit_on_chain_claim,
-    submit_on_chain_initialization, verify_presentation, verify_received_presentation,
-    write_presentation, write_verification_challenge,
+    generate_lez_account_key, generate_lez_private_account_key, generate_presenter_key,
+    initialize_on_chain_state, issue_admission_challenge, issue_challenge, lez_account_id,
+    lez_private_account_id, presenter_public_key, read_presentation, read_verification_challenge,
+    simulate_on_chain_claim, submit_on_chain_claim, submit_on_chain_initialization,
+    verify_presentation, verify_received_presentation, write_presentation,
+    write_verification_challenge, ClaimOutputPaths,
 };
 
 #[derive(Debug, Parser)]
@@ -161,6 +163,12 @@ struct MessagingSendArgs {
     envelope: PathBuf,
     #[arg(long, default_value_t = DEFAULT_CHUNK_BYTES)]
     chunk_bytes: usize,
+    #[arg(long, default_value_t = 1)]
+    copies: u8,
+    #[arg(long, default_value_t = 2_000)]
+    copy_delay_ms: u64,
+    #[arg(long, default_value_t = 0)]
+    message_delay_ms: u64,
 }
 
 #[derive(Clone, Debug, Args)]
@@ -229,6 +237,8 @@ enum OnChainCommand {
     ProgramId,
     AccountGenerate(OnChainAccountGenerateArgs),
     AccountId(OnChainAccountIdArgs),
+    PrivateAccountGenerate(OnChainAccountGenerateArgs),
+    PrivateAccountId(OnChainAccountIdArgs),
     Deploy(OnChainDeployArgs),
     Init(OnChainInitArgs),
     FetchState(OnChainFetchStateArgs),
@@ -267,6 +277,8 @@ struct OnChainInitArgs {
     commitment_root_hex: String,
     #[arg(long)]
     challenge_nonce_hex: String,
+    #[arg(long, default_value_t = DEFAULT_ON_CHAIN_PROOF_AGE_MS)]
+    max_proof_age_ms: u64,
     #[arg(long)]
     output: PathBuf,
 }
@@ -346,7 +358,9 @@ struct OnChainComposeArgs {
     #[arg(long)]
     gate_account_id_hex: String,
     #[arg(long)]
-    badge_account_id_hex: String,
+    badge_key: PathBuf,
+    #[arg(long)]
+    output_badge: PathBuf,
     #[arg(long)]
     output_lez_proof: PathBuf,
 }
@@ -365,6 +379,8 @@ struct OnChainClaimSubmitArgs {
     gate_account_id_hex: String,
     #[arg(long)]
     badge_key: PathBuf,
+    #[arg(long)]
+    output_badge: PathBuf,
     #[arg(long)]
     output_lez_proof: PathBuf,
 }
@@ -712,15 +728,32 @@ fn run_messaging_command(command: MessagingCommand) -> Result<(), String> {
             println!("Challenge written to {}", args.output.display());
         }
         MessagingCommand::Send(args) => {
+            if !(1..=3).contains(&args.copies) {
+                return Err("--copies must be between 1 and 3".to_owned());
+            }
             let envelope = read_presentation(&args.envelope)?;
             let bundle =
                 pack_envelope(&envelope, args.chunk_bytes).map_err(|error| error.to_string())?;
-            messaging_client(&args.connection)
-                .send_bundle(&args.connection.conversation_id, &bundle)
-                .map_err(|error| error.to_string())?;
+            let client = messaging_client(&args.connection);
+            for copy in 0..args.copies {
+                client
+                    .send_bundle_with_delay(
+                        &args.connection.conversation_id,
+                        &bundle,
+                        Duration::from_millis(args.message_delay_ms),
+                    )
+                    .map_err(|error| error.to_string())?;
+                if copy + 1 < args.copies {
+                    thread::sleep(Duration::from_millis(args.copy_delay_ms));
+                }
+            }
             println!("Proof sent over Logos Messaging");
             println!("Transfer ID: {}", bundle.transfer_id);
-            println!("Messages: {}", bundle.messages.len());
+            println!(
+                "Messages: {} unique x {} copies",
+                bundle.messages.len(),
+                args.copies
+            );
         }
         MessagingCommand::Receive(args) => {
             let (transfer_id, envelope) = receive_presentation(&args.receive)?;
@@ -833,6 +866,20 @@ async fn run_on_chain_command(command: OnChainCommand) -> Result<(), String> {
             println!("{account_id}");
             println!("Account ID hex: {}", digest_to_hex(account_id.value()));
         }
+        OnChainCommand::PrivateAccountGenerate(args) => {
+            let account_id = generate_lez_private_account_key(&args.output)?;
+            println!(
+                "LEZ private account key written to {} with restricted permissions",
+                args.output.display()
+            );
+            println!("Account ID: {account_id}");
+            println!("Account ID hex: {}", digest_to_hex(account_id.value()));
+        }
+        OnChainCommand::PrivateAccountId(args) => {
+            let account_id = lez_private_account_id(&args.key)?;
+            println!("{account_id}");
+            println!("Account ID hex: {}", digest_to_hex(account_id.value()));
+        }
         OnChainCommand::Deploy(args) => {
             let transaction_hash = deploy_balance_gate(&args.sequencer_url).await?;
             println!("Balance gate deployment submitted");
@@ -847,14 +894,20 @@ async fn run_on_chain_command(command: OnChainCommand) -> Result<(), String> {
                 .map_err(|error| format!("invalid --commitment-root-hex: {error}"))?;
             let nonce = digest_from_hex(&args.challenge_nonce_hex)
                 .map_err(|error| format!("invalid --challenge-nonce-hex: {error}"))?;
-            let state =
-                initialize_on_chain_state(&args.gate, commitment_root, nonce, &args.output)?;
+            let state = initialize_on_chain_state(
+                &args.gate,
+                commitment_root,
+                nonce,
+                args.max_proof_age_ms,
+                &args.output,
+            )?;
             println!("On-chain gate state written to {}", args.output.display());
             println!("Context hash: {}", digest_to_hex(&state.context_hash));
             println!(
                 "Authorized commitment root: {}",
                 digest_to_hex(&state.commitment_root)
             );
+            println!("Maximum proof age: {} ms", state.max_proof_age_ms);
             println!(
                 "Program ID: {}",
                 program_owner_to_hex(&balance_gate_program_id())
@@ -938,25 +991,40 @@ async fn run_on_chain_command(command: OnChainCommand) -> Result<(), String> {
             }
             let gate_account_id = digest_from_hex(&args.gate_account_id_hex)
                 .map_err(|error| format!("invalid --gate-account-id-hex: {error}"))?;
-            let badge_account_id = digest_from_hex(&args.badge_account_id_hex)
-                .map_err(|error| format!("invalid --badge-account-id-hex: {error}"))?;
             println!("RISC0_DEV_MODE: disabled (real LEZ composition)");
             let result = compose_on_chain_claim(
                 &args.proof,
                 &args.state,
                 &args.claim,
                 gate_account_id,
-                badge_account_id,
+                &args.badge_key,
+                &args.output_badge,
                 &args.output_lez_proof,
             )?;
+            println!(
+                "Private access badge written to {}",
+                args.output_badge.display()
+            );
             println!("LEZ proof written to {}", args.output_lez_proof.display());
             println!("Proof bytes: {}", result.proof_bytes);
             println!("Public post states: {}", result.public_post_states);
+            println!(
+                "Encrypted private post states: {}",
+                result.encrypted_private_post_states
+            );
             println!("Private commitments: {}", result.private_commitments);
             println!("Nullifiers: {}", result.nullifiers);
             println!("Gate proving time: {} ms", result.gate_proving_ms);
             println!("LEZ PPE proving time: {} ms", result.outer_proving_ms);
             println!("Total composition time: {} ms", result.total_proving_ms);
+            println!("Gate total cycles: {}", result.gate_total_cycles);
+            println!("Gate user cycles: {}", result.gate_user_cycles);
+            println!("Gate paging cycles: {}", result.gate_paging_cycles);
+            println!("Gate segments: {}", result.gate_segments);
+            println!("LEZ PPE total cycles: {}", result.outer_total_cycles);
+            println!("LEZ PPE user cycles: {}", result.outer_user_cycles);
+            println!("LEZ PPE paging cycles: {}", result.outer_paging_cycles);
+            println!("LEZ PPE segments: {}", result.outer_segments);
         }
         OnChainCommand::ClaimSubmit(args) => {
             if dev_mode_status().map_err(|error| error.to_string())? != DevModeStatus::Disabled {
@@ -972,14 +1040,25 @@ async fn run_on_chain_command(command: OnChainCommand) -> Result<(), String> {
                 &args.claim,
                 gate_account_id,
                 &args.badge_key,
-                &args.output_lez_proof,
+                ClaimOutputPaths {
+                    badge: &args.output_badge,
+                    proof: &args.output_lez_proof,
+                },
             )
             .await?;
+            println!(
+                "Private access badge written to {}",
+                args.output_badge.display()
+            );
             println!("LEZ proof written to {}", args.output_lez_proof.display());
             println!("Proof bytes: {}", result.composition.proof_bytes);
             println!(
                 "Public post states: {}",
                 result.composition.public_post_states
+            );
+            println!(
+                "Encrypted private post states: {}",
+                result.composition.encrypted_private_post_states
             );
             println!(
                 "Private commitments: {}",
@@ -998,6 +1077,29 @@ async fn run_on_chain_command(command: OnChainCommand) -> Result<(), String> {
                 "Total composition time: {} ms",
                 result.composition.total_proving_ms
             );
+            println!(
+                "Gate total cycles: {}",
+                result.composition.gate_total_cycles
+            );
+            println!("Gate user cycles: {}", result.composition.gate_user_cycles);
+            println!(
+                "Gate paging cycles: {}",
+                result.composition.gate_paging_cycles
+            );
+            println!("Gate segments: {}", result.composition.gate_segments);
+            println!(
+                "LEZ PPE total cycles: {}",
+                result.composition.outer_total_cycles
+            );
+            println!(
+                "LEZ PPE user cycles: {}",
+                result.composition.outer_user_cycles
+            );
+            println!(
+                "LEZ PPE paging cycles: {}",
+                result.composition.outer_paging_cycles
+            );
+            println!("LEZ PPE segments: {}", result.composition.outer_segments);
             println!("Transaction hash: {}", result.transaction_hash);
         }
     }
@@ -1313,6 +1415,8 @@ mod tests {
             &"11".repeat(32),
             "--badge-key",
             "badge.json",
+            "--output-badge",
+            "access-badge.json",
             "--output-lez-proof",
             "lez-proof.bin",
         ])

@@ -11,8 +11,9 @@ Basecamp:
 - verify presentations locally with persistent replay protection;
 - send and receive chunked presentations through `chat_module`;
 - admit a sender-bound holder to a GroupV2 conversation; and
-- read an operator-owned sequencer root, then deploy, initialize, simulate,
-  compose, sign, and submit the SPEL on-chain access-badge flow.
+- read an operator-owned sequencer root, then deploy and initialize the public
+  gate, generate a private badge identity, compose its encrypted output, and
+  submit the SPEL private transaction.
 
 ## Architecture
 
@@ -29,8 +30,8 @@ The backend uses `QProcess` argument lists and never invokes a shell. It forces
 `RISC0_DEV_MODE=0`, drains stdout/stderr while long proofs run, rejects
 concurrent operations, and supports cancellation. Presenter secrets remain in
 permission-restricted files managed by the Rust CLI; they are never returned
-as QML values. LEZ gate and badge signer files use the same restricted-file
-boundary.
+as QML values. LEZ gate signer, private badge, and presenter key files use the
+same restricted-file boundary.
 
 ## Build
 
@@ -69,15 +70,12 @@ existing direct/group conversation IDs. See `docs/LOGOS_MESSAGING.md` and
 
 ## Local Validation Boundary
 
-The Rust command contracts and current QML source assertions behind every
-control are covered by workspace tests and strict Clippy. The earlier UI
-revision was packaged successfully with `nix build .#lgx` using the locked
-official module builder, Qt, `lez_core`, `delivery_module`, and
-`chat_module` graph. Its official Logos Qt integration run completed with
-four passing tests and a non-empty `proofgate-desktop.png`.
+The Rust command contracts and QML source assertions behind every control are
+covered by workspace tests and strict Clippy. The local package runner builds
+the locked official module builder, Qt, `lez_core`, `delivery_module`, and
+`chat_module` graph, then runs the official Logos Qt integration suite and
+exports a non-empty desktop screenshot.
 
-The current revision adds required trusted-root inputs and sequencer-root
-actions to Prove, Messaging, and On-chain views. A fresh Nix package/integration
-run and installation in the full Basecamp client remain release evidence; the
-historical artifact is not represented as the current installable build. See
-`docs/evidence/BASECAMP_INTEGRATION.md` for the exact boundary.
+Run `scripts/basecamp-local.sh` from the repository root to reproduce the LGX
+and integration artifacts. See `docs/evidence/BASECAMP_INTEGRATION.md` for
+the current hashes and remaining narrated-demo boundary.

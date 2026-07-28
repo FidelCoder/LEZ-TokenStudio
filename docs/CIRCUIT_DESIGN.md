@@ -21,7 +21,7 @@ The circuit proves all of the following:
 
 The circuit proves membership under the root recorded in its journal. Root
 authority is deliberately enforced outside the balance circuit: an off-chain
-VerificationChallenge v2 or on-chain GateState v2 must contain a root obtained
+VerificationChallenge v2 or on-chain GateState v3 must contain a root obtained
 independently by the verifier. Accepting only the root carried by a holder's
 proof would let that holder construct an unrelated private tree.
 

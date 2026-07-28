@@ -1,5 +1,5 @@
 use std::{
-    collections::BTreeMap,
+    collections::{BTreeMap, BTreeSet},
     path::PathBuf,
     process::Command,
     thread,
@@ -23,6 +23,8 @@ pub const DEFAULT_CHUNK_BYTES: usize = 32 * 1024;
 pub const MAX_CHUNK_BYTES: usize = 48 * 1024;
 pub const MAX_TRANSFER_BYTES: usize = 4 * 1024 * 1024;
 pub const MAX_CHUNKS: usize = 128;
+const MAX_ENCODED_CHUNK_BYTES: usize = MAX_CHUNK_BYTES.div_ceil(3) * 4;
+const MAX_PENDING_WIRE_MESSAGES: usize = (MAX_CHUNKS + 1) * 4;
 const ADMISSION_CHALLENGE_DOMAIN: &[u8] = b"LEZ-TokenStudio/LogosChatAdmission/v1";
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -144,9 +146,21 @@ impl LogosCoreClient {
         conversation_id: &str,
         bundle: &TransferBundle,
     ) -> Result<(), MessagingError> {
-        for message in &bundle.messages {
+        self.send_bundle_with_delay(conversation_id, bundle, Duration::ZERO)
+    }
+
+    pub fn send_bundle_with_delay(
+        &self,
+        conversation_id: &str,
+        bundle: &TransferBundle,
+        inter_message_delay: Duration,
+    ) -> Result<(), MessagingError> {
+        for (index, message) in bundle.messages.iter().enumerate() {
             let response = self.call("send_message", &[conversation_id, message])?;
             require_result_success(&response)?;
+            if index + 1 < bundle.messages.len() && !inter_message_delay.is_zero() {
+                thread::sleep(inter_message_delay);
+            }
         }
         Ok(())
     }
@@ -361,6 +375,55 @@ pub fn pack_envelope_with_id(
     })
 }
 
+fn validate_wire_body(body: &WireBody) -> Result<(), MessagingError> {
+    match body {
+        WireBody::Manifest {
+            envelope_sha256,
+            envelope_bytes,
+            chunk_count,
+            context_hash,
+            challenge_digest,
+        } => {
+            if *chunk_count == 0
+                || !matches!(
+                    usize::try_from(*chunk_count),
+                    Ok(count) if count <= MAX_CHUNKS
+                )
+                || !matches!(
+                    usize::try_from(*envelope_bytes),
+                    Ok(bytes) if bytes <= MAX_TRANSFER_BYTES
+                )
+                || digest_from_hex(envelope_sha256).is_err()
+                || digest_from_hex(context_hash).is_err()
+                || digest_from_hex(challenge_digest).is_err()
+            {
+                return Err(MessagingError::InvalidWireMessage(
+                    "manifest fields are outside protocol bounds".to_owned(),
+                ));
+            }
+        }
+        WireBody::Chunk {
+            chunk_index,
+            chunk_count,
+            data_base64,
+        } => {
+            if *chunk_count == 0
+                || !matches!(
+                    usize::try_from(*chunk_count),
+                    Ok(count) if count <= MAX_CHUNKS
+                )
+                || chunk_index >= chunk_count
+                || data_base64.len() > MAX_ENCODED_CHUNK_BYTES
+            {
+                return Err(MessagingError::InvalidWireMessage(
+                    "chunk fields are outside protocol bounds".to_owned(),
+                ));
+            }
+        }
+    }
+    Ok(())
+}
+
 pub fn unpack_envelope<I, S>(
     contents: I,
     requested_transfer_id: Option<&str>,
@@ -387,6 +450,7 @@ where
         if requested_transfer_id.is_some_and(|requested| requested != message.transfer_id) {
             continue;
         }
+        validate_wire_body(&message.body)?;
         let transfer = transfers.entry(message.transfer_id.clone()).or_default();
         match message.body {
             WireBody::Manifest {
@@ -447,6 +511,57 @@ where
     Ok((transfer_id, envelope))
 }
 
+#[derive(Debug, Default)]
+struct PendingWireMessages {
+    contents: Vec<String>,
+    seen: BTreeSet<String>,
+}
+
+impl PendingWireMessages {
+    fn observe<I, S>(
+        &mut self,
+        contents: I,
+        requested_transfer_id: Option<&str>,
+    ) -> Result<(), MessagingError>
+    where
+        I: IntoIterator<Item = S>,
+        S: AsRef<str>,
+    {
+        for content in contents {
+            let content = content.as_ref();
+            let Ok(message) = serde_json::from_str::<WireMessage>(content) else {
+                continue;
+            };
+            if message.protocol != PROTOCOL
+                || message.version != WIRE_VERSION
+                || validate_transfer_id(&message.transfer_id).is_err()
+                || requested_transfer_id.is_some_and(|requested| requested != message.transfer_id)
+            {
+                continue;
+            }
+            validate_wire_body(&message.body)?;
+            if self.seen.contains(content) {
+                continue;
+            }
+            if self.contents.len() >= MAX_PENDING_WIRE_MESSAGES {
+                return Err(MessagingError::InvalidWireMessage(
+                    "too many pending transfer messages".to_owned(),
+                ));
+            }
+            self.seen.insert(content.to_owned());
+            self.contents.push(content.to_owned());
+        }
+        Ok(())
+    }
+
+    fn unpack(
+        &self,
+        requested_transfer_id: Option<&str>,
+    ) -> Result<(String, AttestationEnvelope), MessagingError> {
+        unpack_envelope(self.contents.iter(), requested_transfer_id)
+    }
+}
+
 pub fn receive_envelope(
     client: &LogosCoreClient,
     conversation_id: &str,
@@ -456,6 +571,7 @@ pub fn receive_envelope(
     poll_interval: Duration,
 ) -> Result<(String, AttestationEnvelope), MessagingError> {
     let started = Instant::now();
+    let mut pending = PendingWireMessages::default();
     loop {
         let messages = client.get_messages(conversation_id)?;
         let contents = messages
@@ -465,9 +581,10 @@ pub fn receive_envelope(
                 expected_sender.is_none_or(|expected| message.sender.as_deref() == Some(expected))
             })
             .map(|message| message.content.as_str());
-        // Polling mirrors the official headless chat doctest. Basecamp consumes
-        // the same data through push events and can call unpack_envelope directly.
-        match unpack_envelope(contents, requested_transfer_id) {
+        // get_messages is a rolling window, so retain bounded unique protocol
+        // messages across polls until a complete transfer can be assembled.
+        pending.observe(contents, requested_transfer_id)?;
+        match pending.unpack(requested_transfer_id) {
             Ok(envelope) => return Ok(envelope),
             Err(MessagingError::NoTransfer | MessagingError::IncompleteTransfer { .. }) => {}
             Err(error) => return Err(error),
@@ -699,6 +816,65 @@ mod tests {
             unpack_envelope(bundle.messages.iter(), Some(&bundle.transfer_id)).unwrap();
         assert_eq!(transfer_id, bundle.transfer_id);
         assert_eq!(unpacked, envelope);
+    }
+
+    #[test]
+    fn rolling_message_windows_are_accumulated() {
+        let envelope = envelope();
+        let bundle = pack_envelope_with_id(
+            &envelope,
+            DEFAULT_CHUNK_BYTES,
+            "00112233445566778899aabbccddeeff",
+        )
+        .unwrap();
+        let split = bundle.messages.len() / 2;
+        let mut pending = PendingWireMessages::default();
+
+        pending
+            .observe(
+                bundle.messages[..split].iter().map(String::as_str),
+                Some(&bundle.transfer_id),
+            )
+            .unwrap();
+        assert!(matches!(
+            pending.unpack(Some(&bundle.transfer_id)),
+            Err(MessagingError::NoTransfer)
+        ));
+
+        let mut later_window = bundle.messages[split.saturating_sub(1)..].to_vec();
+        later_window.reverse();
+        pending
+            .observe(
+                later_window.iter().map(String::as_str),
+                Some(&bundle.transfer_id),
+            )
+            .unwrap();
+        let (_, unpacked) = pending.unpack(Some(&bundle.transfer_id)).unwrap();
+        assert_eq!(unpacked, envelope);
+    }
+
+    #[test]
+    fn oversized_encoded_chunks_are_rejected_before_accumulation() {
+        let envelope = envelope();
+        let bundle = pack_envelope_with_id(
+            &envelope,
+            DEFAULT_CHUNK_BYTES,
+            "00112233445566778899aabbccddeeff",
+        )
+        .unwrap();
+        let mut message: WireMessage = serde_json::from_str(&bundle.messages[0]).unwrap();
+        let WireBody::Chunk { data_base64, .. } = &mut message.body else {
+            panic!("first message must be a chunk");
+        };
+        *data_base64 = "A".repeat(MAX_ENCODED_CHUNK_BYTES + 1);
+        let content = serde_json::to_string(&message).unwrap();
+        let mut pending = PendingWireMessages::default();
+
+        assert!(matches!(
+            pending.observe([content.as_str()], Some(&bundle.transfer_id)),
+            Err(MessagingError::InvalidWireMessage(_))
+        ));
+        assert!(pending.contents.is_empty());
     }
 
     #[test]
