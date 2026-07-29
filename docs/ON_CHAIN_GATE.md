@@ -88,7 +88,7 @@ nullifier secret key inside the circuit; it is not an Ed25519 public-account
 signature.
 
 The generated SPEL IDL is committed at
-`programs/balance-gate/idl/balance_gate.json`.
+`programs/balance-gate/idl/balance_gate.idl.json`.
 
 ## Sequencer Flow
 

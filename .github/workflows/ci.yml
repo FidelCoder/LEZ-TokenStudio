@@ -51,9 +51,9 @@ jobs:
           node --check scripts/check-basecamp-command-contract.mjs
           node scripts/check-basecamp-command-contract.mjs
           jq -e . apps/basecamp-tokenstudio/metadata.json >/dev/null
-          jq -e . programs/balance-gate/idl/balance_gate.json >/dev/null
+          jq -e . programs/balance-gate/idl/balance_gate.idl.json >/dev/null
           generated=$(cargo run --quiet -p balance-gate-methods --example generate_idl | jq -S -c .)
-          committed=$(jq -S -c . programs/balance-gate/idl/balance_gate.json)
+          committed=$(jq -S -c . programs/balance-gate/idl/balance_gate.idl.json)
           test "$generated" = "$committed"
 
       - name: Format

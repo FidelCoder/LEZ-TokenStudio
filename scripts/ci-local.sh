@@ -26,11 +26,11 @@ run_step "Check Basecamp command contract syntax" \
 run_step "Validate Basecamp private badge command contract" \
   node scripts/check-basecamp-command-contract.mjs
 run_step "Validate Basecamp metadata" jq -e . apps/basecamp-tokenstudio/metadata.json
-run_step "Validate committed SPEL IDL" jq -e . programs/balance-gate/idl/balance_gate.json
+run_step "Validate committed SPEL IDL" jq -e . programs/balance-gate/idl/balance_gate.idl.json
 
 printf '\n==> Compare generated and committed SPEL IDL\n'
 generated=$(cargo run --quiet -p balance-gate-methods --example generate_idl | jq -S -c .)
-committed=$(jq -S -c . programs/balance-gate/idl/balance_gate.json)
+committed=$(jq -S -c . programs/balance-gate/idl/balance_gate.idl.json)
 if [[ "$generated" != "$committed" ]]; then
   printf '%s\n' "generated SPEL IDL differs from the committed artifact" >&2
   exit 1
