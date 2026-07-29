@@ -11,6 +11,8 @@ The product keeps token creation in the issuer workflow. Token creation is setup
 UX; the bounty contribution is the reusable private attestation primitive and
 its on-chain and off-chain consumers.
 
+**Narrated demo:** [Google Drive](https://drive.google.com/file/d/1pkmMecmBhRt1Aj6ZpqGJ3MSZniOpk7Jp/view?usp=sharing)
+
 ## What Is Implemented
 
 - Token select, wallet-backed create/mint adapters, and deterministic gate JSON.
@@ -205,42 +207,37 @@ A separate proof-root-bound GateState completed the full real private claim:
 The proposal-bound governance crate supplies another distinct reference
 consumer with persistent issued-challenge, replay, and pseudonymous-vote state.
 
-The repository-owned implementation and testnet deployment are complete. The
-remaining official submission outcomes are supported testnet CU/gas evidence,
-green CI on the public default branch, and the narrated end-to-end video. Local
-CI and Risc0 cycle counts are useful evidence but do not replace those explicit
-criteria. See
-[Implementation Status](docs/STATUS.md), [Public Testnet
-Evidence](docs/evidence/LIVE_LEZ_TESTNET.md), and
+The repository-owned implementation, public testnet claim, and narrated demo
+are complete. The current LEZ testnet RPC does not expose per-transaction CU or
+gas-used metadata, so Risc0 guest cycles are documented separately and are not
+represented as network CU. Local strict Clippy and workspace validation pass;
+hosted GitHub jobs are currently blocked before execution by the account's
+billing lock. See [Public Testnet Evidence](docs/evidence/LIVE_LEZ_TESTNET.md),
+[Transaction Cost Evidence](docs/evidence/LEZ_TESTNET_COSTS.md), and
 [Benchmarks](docs/BENCHMARKS.md).
 
 ## Documentation
 
 - [Architecture](docs/ARCHITECTURE.md)
 - [Circuit Design](docs/CIRCUIT_DESIGN.md)
-- [Prover Inputs](docs/PROVER_INPUTS.md)
-- [Risc0 Proving](docs/RISC0_PROVING.md)
 - [On-Chain Gate](docs/ON_CHAIN_GATE.md)
 - [Logos Messaging](docs/LOGOS_MESSAGING.md)
+- [Privacy Model](docs/PRIVACY_MODEL.md)
 - [Error Codes](docs/ERROR_CODES.md)
-- [Token Setup](docs/TOKEN_SETUP.md)
-- [LEZ Compatibility](docs/LEZ_COMPATIBILITY.md)
+- [Benchmarks](docs/BENCHMARKS.md)
+- [Solution Write-Up](docs/SOLUTION.md)
 - [Local LEZ v0.2.0 Evidence](docs/evidence/LOCAL_LEZ_V0_2_0.md)
 - [Live Logos Messaging Evidence](docs/evidence/LIVE_LOGOS_MESSAGING.md)
 - [Official Basecamp Integration Evidence](docs/evidence/BASECAMP_INTEGRATION.md)
 - [Live LEZ Testnet Evidence](docs/evidence/LIVE_LEZ_TESTNET.md)
 - [LEZ Testnet Transaction Cost Evidence](docs/evidence/LEZ_TESTNET_COSTS.md)
 - [Offline Submission Validation](docs/OFFLINE_VALIDATION.md)
-- [Video Demo Guide](docs/VIDEO_DEMO.md)
-- [External Integrator Guide](docs/EXTERNAL_INTEGRATOR_GUIDE.md)
-- [LP-0005 Execution Plan](docs/LP-0005_EXECUTION_PLAN.md)
-- [Submission Playbook](docs/LAMBDA_PRIZE_SUBMISSION.md)
 
 ## Submission Policy
 
-The implementation repository is `FidelCoder/LEZ-TokenStudio` and the target
-default branch is `main`. The implementation is committed and pushed. No pull
-request to the Lambda Prize repository will be created until the owner has
-recorded the mandatory video and approved the final solution write-up.
+The implementation repository is `FidelCoder/LEZ-TokenStudio` on `main`. The
+official solution is submitted through `solutions/LP-0005.md` in the Lambda
+Prize repository. A payment issue is opened only after a winning solution is
+merged.
 
 Licensed under MIT OR Apache-2.0.

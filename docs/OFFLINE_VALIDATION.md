@@ -79,5 +79,5 @@ scripts/ci-testnet-evidence.sh \
 
 The public testnet evidence includes a real private claim, counter rotation,
 badge binding, and stale replay denial. The network RPC still exposes no CU
-field; that mandatory measurement gap remains explicit in [Implementation
-Status](STATUS.md).
+field; the measurement boundary is documented in [LEZ Testnet Transaction Cost
+Evidence](evidence/LEZ_TESTNET_COSTS.md).
