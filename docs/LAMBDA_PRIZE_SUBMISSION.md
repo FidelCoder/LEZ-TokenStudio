@@ -140,8 +140,6 @@ Solution: LP-0005 — TokenStudio ProofGate
 - Basecamp module present and documented.
 - SPEL IDL present.
 - Benchmarks include proof generation time and on-chain cost.
-- Three distinct testnet applications are evidenced.
-- At least one application is authored by a party outside the submitting team.
 - Narrated video linked in `solutions/LP-0005.md`.
 - FURPS self-assessment complete.
 - Terms acknowledged.

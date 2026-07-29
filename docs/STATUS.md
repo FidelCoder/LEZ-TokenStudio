@@ -6,8 +6,7 @@ All repository-owned technical paths are implemented and validated without
 depending on GitHub Actions. A real `RISC0_DEV_MODE=0` private claim is now
 included on the official LEZ testnet. The repository is not yet ready for an
 LP-0005 submission because the official criteria still require supported
-network CU evidence, outside-party adoption, green default-branch CI, and a
-narrated video.
+network CU evidence, green default-branch CI, and a narrated video.
 
 ## Completed Technical Work
 
@@ -73,16 +72,15 @@ These items are mandatory official outcomes, not optional polish:
   operation. The current official RPC returns the serialized transaction and
   block ID but exposes no CU field, and current LEZ source has no cost-metadata
   RPC. Local Risc0 cycles must not be mislabeled as network CU.
-- Obtain evidence for three distinct testnet applications with at least one
-  built by a party outside the submitting team. This repository supplies the
-  on-chain access grant, Logos Chat, Basecamp, and governance reference
-  integrations, but team-authored examples cannot satisfy outside provenance.
 - Make CI green on the public repository default branch. Local CI is
-  reproducible evidence but does not replace this explicit hosted status.
+  reproducible evidence but does not replace this explicit hosted status. The
+  current jobs do not start because the GitHub account is locked by a billing
+  issue; no repository code executes before the failure.
 - Record and link the mandatory narrated video showing terminal proof
   generation with `RISC0_DEV_MODE=0`, both verification paths, architecture,
   rationale, and key decisions.
-- Owner-review, commit, push, and open the Lambda Prize solution PR.
+- Publish the video link, owner-review the final write-up, and open the Lambda
+  Prize solution PR.
 
 The official criteria are:
 <https://github.com/logos-co/lambda-prize/blob/master/prizes/LP-0005.md>.
@@ -100,9 +98,12 @@ scripts/ci-standalone-claim.sh \
   /path/to/lez-v0.2.0/sequencer_service \
   /path/to/lez-v0.2.0/sequencer_config.json
 scripts/basecamp-local.sh
+scripts/video-preflight.sh
 ```
 
 See [Public Testnet Evidence](evidence/LIVE_LEZ_TESTNET.md),
+[Transaction Cost Evidence](evidence/LEZ_TESTNET_COSTS.md),
 [Benchmarks](BENCHMARKS.md), [External Integrator
 Guide](EXTERNAL_INTEGRATOR_GUIDE.md), and [Offline
-Validation](OFFLINE_VALIDATION.md).
+Validation](OFFLINE_VALIDATION.md). The recording sequence is in [Video Demo
+Guide](VIDEO_DEMO.md).

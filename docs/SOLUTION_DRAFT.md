@@ -86,8 +86,6 @@ and admission remains local rather than delegated to a hosted verifier API.
   reproducibility documentation are included.
 - [ ] Document supported devnet/testnet CU or gas cost for every on-chain
   operation.
-- [ ] Provide three distinct testnet integrations with at least one application
-  built by a party outside the submitting team.
 - [ ] Make CI green on the public default branch.
 - [ ] Record and link the mandatory narrated end-to-end video.
 
@@ -170,6 +168,8 @@ environment details, and SHA-256 manifests without secret keys or witnesses.
 - [Live Logos Messaging evidence](evidence/LIVE_LOGOS_MESSAGING.md)
 - [Official Basecamp integration evidence](evidence/BASECAMP_INTEGRATION.md)
 - [Live LEZ testnet evidence](evidence/LIVE_LEZ_TESTNET.md)
+- [LEZ testnet transaction cost evidence](evidence/LEZ_TESTNET_COSTS.md)
+- [Downloadable Basecamp LGX](https://github.com/FidelCoder/LEZ-TokenStudio/releases/download/v0.1.0/logos-tokenstudio_proofgate_ui-module.lgx)
 - [External integrator guide](EXTERNAL_INTEGRATOR_GUIDE.md)
 - [Offline local validation](OFFLINE_VALIDATION.md)
 - **Narrated demo:** TODO

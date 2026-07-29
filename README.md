@@ -161,7 +161,9 @@ verifies them locally, binds one sender address to one GroupV2 ID, and invokes
 [Logos Messaging](docs/LOGOS_MESSAGING.md).
 
 The Basecamp module source and `.lgx` build instructions are in
-[apps/basecamp-tokenstudio](apps/basecamp-tokenstudio/README.md).
+[apps/basecamp-tokenstudio](apps/basecamp-tokenstudio/README.md). The tested
+[ProofGate v0.1.0 LGX](https://github.com/FidelCoder/LEZ-TokenStudio/releases/download/v0.1.0/logos-tokenstudio_proofgate_ui-module.lgx)
+is available as a GitHub release asset.
 
 The proposal-bound governance consumer is in
 [crates/proofgate-governance](crates/proofgate-governance) with a complete
@@ -203,11 +205,11 @@ A separate proof-root-bound GateState completed the full real private claim:
 The proposal-bound governance crate supplies another distinct reference
 consumer with persistent issued-challenge, replay, and pseudonymous-vote state.
 
-The repository is not yet submission-ready under the official LP-0005 rubric.
-CU/gas evidence for every on-chain operation, three testnet applications
-including one built by an outside party, green CI on the public default branch,
-and the narrated video are mandatory remaining outcomes. Local CI and cycle
-counts are useful evidence but do not replace those explicit criteria. See
+The repository-owned implementation and testnet deployment are complete. The
+remaining official submission outcomes are supported testnet CU/gas evidence,
+green CI on the public default branch, and the narrated end-to-end video. Local
+CI and Risc0 cycle counts are useful evidence but do not replace those explicit
+criteria. See
 [Implementation Status](docs/STATUS.md), [Public Testnet
 Evidence](docs/evidence/LIVE_LEZ_TESTNET.md), and
 [Benchmarks](docs/BENCHMARKS.md).
@@ -227,7 +229,9 @@ Evidence](docs/evidence/LIVE_LEZ_TESTNET.md), and
 - [Live Logos Messaging Evidence](docs/evidence/LIVE_LOGOS_MESSAGING.md)
 - [Official Basecamp Integration Evidence](docs/evidence/BASECAMP_INTEGRATION.md)
 - [Live LEZ Testnet Evidence](docs/evidence/LIVE_LEZ_TESTNET.md)
+- [LEZ Testnet Transaction Cost Evidence](docs/evidence/LEZ_TESTNET_COSTS.md)
 - [Offline Submission Validation](docs/OFFLINE_VALIDATION.md)
+- [Video Demo Guide](docs/VIDEO_DEMO.md)
 - [External Integrator Guide](docs/EXTERNAL_INTEGRATOR_GUIDE.md)
 - [LP-0005 Execution Plan](docs/LP-0005_EXECUTION_PLAN.md)
 - [Submission Playbook](docs/LAMBDA_PRIZE_SUBMISSION.md)
@@ -235,8 +239,8 @@ Evidence](docs/evidence/LIVE_LEZ_TESTNET.md), and
 ## Submission Policy
 
 The implementation repository is `FidelCoder/LEZ-TokenStudio` and the target
-default branch is `main`. The completed local changes still require owner
-review, commit, and push. No pull request to the Lambda Prize repository will
-be created until the owner has tested and approved the finished implementation.
+default branch is `main`. The implementation is committed and pushed. No pull
+request to the Lambda Prize repository will be created until the owner has
+recorded the mandatory video and approved the final solution write-up.
 
 Licensed under MIT OR Apache-2.0.

@@ -17,6 +17,7 @@ run_step "Check standalone claim CI shell syntax" bash -n scripts/ci-standalone-
 run_step "Check local submission CI shell syntax" bash -n scripts/ci-submission-local.sh
 run_step "Check testnet evidence shell syntax" bash -n scripts/ci-testnet-evidence.sh
 run_step "Check local Basecamp runner shell syntax" bash -n scripts/basecamp-local.sh
+run_step "Check video preflight shell syntax" bash -n scripts/video-preflight.sh
 run_step "Check demo shell syntax" bash -n scripts/demo.sh
 run_step "Check Messaging demo shell syntax" bash -n demos/token-gated-chat/run.sh
 run_step "Check Basecamp UI test syntax" node --check apps/basecamp-tokenstudio/tests/ui-tests.mjs

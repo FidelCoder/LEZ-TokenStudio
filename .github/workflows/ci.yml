@@ -44,6 +44,7 @@ jobs:
           bash -n scripts/ci-standalone-claim.sh
           bash -n scripts/ci-submission-local.sh
           bash -n scripts/basecamp-local.sh
+          bash -n scripts/video-preflight.sh
           bash -n scripts/demo.sh
           bash -n demos/token-gated-chat/run.sh
           node --check apps/basecamp-tokenstudio/tests/ui-tests.mjs

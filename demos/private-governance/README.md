@@ -16,7 +16,7 @@ snapshot is a private file and must not be committed:
 
 ```bash
 export LEE_WALLET_HOME_DIR=/path/to/isolated-wallet
-target/release/proofgate presenter-keygen --output /tmp/presenter.json
+target/release/proofgate presenter generate --output /tmp/presenter.json
 target/release/proofgate wallet snapshot \
   --wallet-binary /path/to/wallet \
   --account-id Private/ACCOUNT_ID \

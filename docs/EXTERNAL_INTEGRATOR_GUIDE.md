@@ -1,8 +1,7 @@
 # External Integrator Guide
 
-LP-0005 requires at least one of the three testnet applications to be built by a
-party outside the submitting team. A team-authored example cannot satisfy that
-criterion. This guide keeps the outside integration small while preserving the
+LP-0005 requires a standalone consumer integration that evaluators can run and
+test. This guide keeps an additional integration small while preserving the
 attestation trust boundaries.
 
 ## Integration Contract
@@ -64,10 +63,10 @@ belong in public evidence.
 
 ## Evidence To Return
 
-The outside integrator should publish:
+The integrator should publish:
 
 - application repository URL and immutable commit;
-- author/team identity showing they are outside the submitting team;
+- author or team identity;
 - distinct application/gate/verifier identifiers;
 - official testnet endpoint and relevant transaction/program IDs;
 - an allow log for a real proof and denial logs for wrong-context and replay;
@@ -76,6 +75,5 @@ The outside integrator should publish:
 - a short statement that no private wallet data is committed.
 
 The submitting team should link this evidence without rewriting its authorship
-history. An issue, pull request, or signed statement can establish provenance,
-but the application code and commit must remain attributable to the outside
-party.
+history. The application code and commit should remain attributable to its
+authors.

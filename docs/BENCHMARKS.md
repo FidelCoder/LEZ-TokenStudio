@@ -134,11 +134,11 @@ propagation time, so no network latency is claimed.
 
 | Measurement | Result |
 | --- | ---: |
-| Current LGX | 765,585 bytes |
-| Current LGX SHA-256 | `dc6938044ae38805bf8cbefde908a7467d4392e70a12cfd2d4bb529911ee5145` |
+| Current LGX | 765,546 bytes |
+| Current LGX SHA-256 | `983b563b0261dc333c580d45abff4c41a5b7362556d433f51ab9a5a024439a2a` |
 | Official Qt integration tests | 4 passed / 0 failed |
-| Desktop render | 1024 x 768, 47,633 bytes |
-| Render SHA-256 | `a3017630cf163b77c0b1c2e6e56669808124ab854f50cafbcabddaab355161ad` |
+| Desktop render | 1024 x 768, 48,149 bytes |
+| Render SHA-256 | `0a0affd9985db18d99fc07a804fb92d1d2aa804ac8db99b2e1c9d7d5c4ddf42b` |
 
 ## Cost Boundary
 

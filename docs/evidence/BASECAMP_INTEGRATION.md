@@ -51,15 +51,19 @@ The LGX manifest is version `0.1.0`, type `ui_qml`, and declares:
 
 | Final local artifact | Bytes | SHA-256 |
 | --- | ---: | --- |
-| `logos-tokenstudio_proofgate_ui-module.lgx` | 765,585 | `dc6938044ae38805bf8cbefde908a7467d4392e70a12cfd2d4bb529911ee5145` |
-| `integration/app-data/proofgate-desktop.png` | 47,633 | `a3017630cf163b77c0b1c2e6e56669808124ab854f50cafbcabddaab355161ad` |
+| `logos-tokenstudio_proofgate_ui-module.lgx` | 765,546 | `983b563b0261dc333c580d45abff4c41a5b7362556d433f51ab9a5a024439a2a` |
+| `integration/app-data/proofgate-desktop.png` | 48,149 | `0a0affd9985db18d99fc07a804fb92d1d2aa804ac8db99b2e1c9d7d5c4ddf42b` |
+
+Download the tested [ProofGate v0.1.0 LGX](https://github.com/FidelCoder/LEZ-TokenStudio/releases/download/v0.1.0/logos-tokenstudio_proofgate_ui-module.lgx)
+and its [verified desktop render](https://github.com/FidelCoder/LEZ-TokenStudio/releases/download/v0.1.0/proofgate-desktop.png)
+from the public GitHub release.
 
 The resolved outputs were:
 
-- LGX: `/nix/store/0f7smb6xfygp16q8ykhsvdy36xw4ybws-logos-tokenstudio_proofgate_ui-module-lgx-0.1.0`
-- integration: `/nix/store/gcjwqcmwjrb4scmhkzy7fp895aysxpyk-tokenstudio_proofgate_ui-integration-test`
+- LGX: `/nix/store/jwvfz8ilqrha10rg00zvvnbiddkkrkjc-logos-tokenstudio_proofgate_ui-module-lgx-0.1.0`
+- integration: `/nix/store/3nvvn76l1y3634dxpm6d19khivghh71n-tokenstudio_proofgate_ui-integration-test`
 
-Both artifact hashes verify against
-`artifacts/local-submission-final/basecamp/SHA256SUMS`. The package is ready
+Both artifact hashes verify against `artifacts/basecamp-current/SHA256SUMS`.
+The package is ready
 for the narrated full-client demo; recording that demo is submission work, not
 an unimplemented technical path.

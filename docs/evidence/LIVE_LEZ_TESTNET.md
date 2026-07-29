@@ -101,4 +101,5 @@ ID and exposes no CU/gas field. Current official LEZ source likewise has no
 execution-cost metadata RPC. The measured Risc0 cycles above are retained as
 cryptographic compute evidence and are not mislabeled as testnet CU. The
 mandatory network-CU criterion still requires a supported measurement method
-or evaluator guidance.
+or evaluator guidance. The operation-by-operation RPC record and source audit
+are in [LEZ Testnet Transaction Cost Evidence](LEZ_TESTNET_COSTS.md).
